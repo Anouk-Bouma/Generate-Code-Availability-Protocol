@@ -1,0 +1,2186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproducibility Protocol — Phase 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent:       #1f4e79;
+  --accent-mid:   #2e75b6;
+  --accent-light: #bdd7ee;
+  --accent-pale:  #eef5fb;
+  --green-dark:   #375623;
+  --green-bg:     #e2efda;
+  --warn-dark:    #833c00;
+  --warn-bg:      #fce4d6;
+  --yellow-dark:  #5c3d00;
+  --yellow-bg:    #fff2cc;
+  --ink:          #1a1a1a;
+  --ink-mid:      #444;
+  --ink-muted:    #777;
+  --border:       #d0d0cc;
+  --bg-page:      #e8e5e0;
+  --bg-sidebar:   #1f4e79;
+  --sans:         'Source Sans 3', system-ui, sans-serif;
+  --serif:        'Libre Baskerville', Georgia, serif;
+  --mono:         'JetBrains Mono', monospace;
+  --sidebar-w:    170px;
+  --header-h:     56px;
+}
+
+html, body { height: 100%; overflow: hidden; font-family: var(--sans); color: var(--ink); }
+
+/* ── Layout ──────────────────────────────────────────────────────── */
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-sidebar);
+  display: flex; flex-direction: column;
+  flex-shrink: 0; overflow: hidden;
+  transition: width 0.2s ease;
+}
+#sidebar-header {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+#sidebar-header .title {
+  font-family: var(--serif);
+  font-size: 12.5pt;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.3;
+  margin-bottom: 3px;
+}
+#sidebar-header .subtitle {
+  font-size: 8pt;
+  color: var(--accent-light);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+#paper-list-header {
+  padding: 12px 16px 6px;
+  font-size: 7.5pt;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.45);
+}
+#paper-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+#paper-list::-webkit-scrollbar { width: 4px; }
+#paper-list::-webkit-scrollbar-track { background: transparent; }
+#paper-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
+.paper-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.75);
+  font-size: 9pt;
+  margin-bottom: 2px;
+  transition: background 0.15s, color 0.15s;
+  position: relative;
+}
+.paper-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.paper-item.active { background: rgba(255,255,255,0.18); color: #fff; font-weight: 600; }
+.paper-item .paper-num {
+  width: 22px; height: 22px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8pt; font-weight: 700; flex-shrink: 0;
+  color: rgba(255,255,255,0.9);
+}
+.paper-item.active .paper-num { background: var(--accent-light); color: var(--accent); }
+.paper-item .paper-label { flex: 1; min-width: 0; }
+.paper-item .paper-title-short {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 8.5pt;
+}
+.paper-item .paper-status {
+  font-size: 7pt; color: rgba(255,255,255,0.45); margin-top: 1px;
+}
+.paper-item.active .paper-status { color: var(--accent-light); }
+.status-dot {
+  width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: transparent;
+}
+.status-dot.complete { background: #7bc67e; color: #fff; }
+.status-dot.complete::after { content: '✓'; }
+.status-dot.partial  { background: #f4c842; }
+
+input.req-error, select.req-error { border-color: #e53e3e !important; background: #fff5f5 !important; }
+.req-error-group { outline: 2px solid #e53e3e; border-radius: 5px; background: #fff5f5; padding: 4px; }
+#continue-btn {
+  display: block; width: 100%; margin-top: 24px; padding: 14px;
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  font-size: 11pt; font-weight: 600; font-family: var(--sans); cursor: pointer;
+  transition: background 0.15s;
+}
+#continue-btn:hover { background: var(--accent-mid); }
+#validation-msg {
+  margin-top: 10px; padding: 10px 14px; border-radius: 6px; font-size: 9pt;
+  text-align: center; display: none;
+}
+#validation-msg.error { background: #fff5f5; color: #c53030; border: 1px solid #e53e3e; display: block; }
+#validation-msg.success { background: #f0fff4; color: #276749; border: 1px solid #68d391; display: block; }
+#override-continue-btn {
+  display: none; width: 100%; margin-top: 10px; padding: 10px;
+  background: #fff; color: #c53030; border: 1px solid #e53e3e; border-radius: 8px;
+  font-size: 9pt; font-weight: 600; font-family: var(--sans); cursor: pointer;
+  transition: background 0.15s;
+}
+#override-continue-btn:hover { background: #fff5f5; }
+
+#add-paper-btn {
+  margin: 8px; padding: 9px;
+  background: rgba(255,255,255,0.1);
+  border: 1px dashed rgba(255,255,255,0.25);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.6);
+  font-size: 8.5pt; font-family: var(--sans);
+  cursor: pointer; text-align: center;
+  transition: all 0.15s;
+}
+#add-paper-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
+
+/* ── Sidebar toggle button ───────────────────────────────────────── */
+#sidebar-toggle {
+  background: none; border: none; cursor: pointer;
+  color: rgba(255,255,255,0.6); font-size: 15px; line-height: 1;
+  padding: 2px 5px; border-radius: 4px; flex-shrink: 0; align-self: flex-start;
+}
+#sidebar-toggle:hover { background: rgba(255,255,255,0.15); color: #fff; }
+
+/* ── Sidebar collapsed state ─────────────────────────────────────── */
+#sidebar.collapsed { width: 36px; }
+#sidebar.collapsed #sidebar-header { padding: 10px 0 8px; align-items: center; justify-content: center; }
+#sidebar.collapsed .title,
+#sidebar.collapsed .subtitle,
+#sidebar.collapsed #paper-list-header,
+#sidebar.collapsed #add-paper-btn,
+#sidebar.collapsed .paper-label,
+#sidebar.collapsed .paper-num { display: none; }
+#sidebar.collapsed .paper-item { padding: 5px 0; justify-content: center; gap: 0; border-radius: 0; }
+#sidebar.collapsed #sidebar-toggle { align-self: center; }
+
+@media (max-width: 720px) {
+  #sidebar { width: 36px; }
+  #sidebar #sidebar-header { padding: 10px 0 8px; align-items: center; justify-content: center; }
+  #sidebar .title, #sidebar .subtitle,
+  #sidebar #paper-list-header, #sidebar #add-paper-btn,
+  #sidebar .paper-label, #sidebar .paper-num { display: none; }
+  #sidebar .paper-item { padding: 5px 0; justify-content: center; gap: 0; border-radius: 0; }
+  #sidebar #sidebar-toggle { align-self: center; }
+}
+
+/* ── Main area ───────────────────────────────────────────────────── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-page); }
+
+#topbar {
+  height: var(--header-h);
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 28px; gap: 16px;
+  flex-shrink: 0;
+}
+#topbar .paper-heading {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 13pt;
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#topbar .paper-heading span { font-weight: 400; color: var(--ink-muted); font-size: 10pt; margin-left: 8px; font-family: var(--sans); }
+
+.top-btn {
+  padding: 7px 14px;
+  border-radius: 5px;
+  font-size: 8.5pt;
+  font-family: var(--sans);
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+#collapse-btn { background: #f0f0ee; color: var(--ink-mid); }
+#collapse-btn:hover { background: #e4e4e0; }
+#download-btn { background: var(--green-bg); color: var(--green-dark); }
+#download-btn:hover { background: #c6e3b4; }
+#saved-indicator {
+  font-size: 8pt; color: var(--ink-muted);
+  opacity: 0; transition: opacity 0.4s;
+}
+#saved-indicator.show { opacity: 1; }
+
+/* ── Work area (reference + form) ────────────────────────────────── */
+#work-area {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* ── Reference panel ─────────────────────────────────────────────── */
+#ref-panel {
+  width: 46%;
+  min-width: 180px;
+  max-width: 80%;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  background: #fff;
+  border-left: 3px solid var(--border);
+}
+#ref-panel.hidden { display: none; }
+#ref-panel-header {
+  padding: 7px 14px;
+  background: var(--accent-pale);
+  border-bottom: 1px solid var(--accent-light);
+  font-size: 7.5pt; font-weight: 700;
+  color: var(--accent); letter-spacing: 1px;
+  text-transform: uppercase; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+#ref-newtab-btn {
+  font-size: 7.5pt; font-weight: 600;
+  background: none; border: 1px solid var(--accent-light);
+  border-radius: 4px; padding: 2px 8px;
+  color: var(--accent); cursor: pointer;
+  font-family: var(--sans); letter-spacing: 0;
+  text-transform: none; transition: all 0.15s;
+}
+#ref-newtab-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+#ref-iframe { flex: 1; border: none; width: 100%; zoom: 0.85; }
+
+/* -- Scroll area ------------------------------------------------------------------ */
+#content-area-wrap {
+  position: relative; flex: 1; overflow: hidden;
+}
+#content-area {
+  width: 100%; height: 100%; overflow-y: auto; padding: 32px 0 60px; box-sizing: border-box;
+}
+#content-area::-webkit-scrollbar { width: 6px; }
+#content-area::-webkit-scrollbar-track { background: transparent; }
+#content-area::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+.scroll-arrow-btn {
+  position: absolute; right: 10px; width: 26px; height: 26px;
+  border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text);
+  cursor: pointer; font-size: 11px; z-index: 10;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.12); opacity: 0.75; line-height: 1;
+}
+.scroll-arrow-btn:hover { opacity: 1; background: var(--accent-pale); border-color: var(--accent); }
+#scroll-up-btn { top: 8px; }
+#scroll-down-btn { bottom: 8px; }
+
+
+/* ── Reference toggle button ─────────────────────────────────────── */
+#ref-toggle-btn { background: var(--accent-pale); color: var(--accent); }
+#ref-toggle-btn:hover { background: var(--accent-light); }
+
+/* ── Document card ───────────────────────────────────────────────── */
+.doc-card {
+  background: #fff;
+  max-width: 820px;
+  margin: 0 auto;
+  padding: 18px 40px;
+  box-shadow: 0 2px 24px rgba(0,0,0,0.10), 0 0 0 1px rgba(0,0,0,0.05);
+  border-radius: 3px;
+}
+
+/* ── Metadata block ──────────────────────────────────────────────── */
+.meta-block {
+  border: 1.5px solid var(--accent-light);
+  border-radius: 6px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+  background: var(--accent-pale);
+}
+.meta-block h3 {
+  font-family: var(--sans);
+  font-size: 8pt;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-mid);
+  margin-bottom: 14px;
+}
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.meta-field label {
+  display: block; font-size: 8pt; font-weight: 600;
+  color: var(--ink-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.meta-field input {
+  width: 100%; padding: 7px 10px;
+  border: 1px solid var(--border); border-radius: 4px;
+  font-family: var(--sans); font-size: 9.5pt; color: var(--ink);
+  background: #fff;
+  transition: border-color 0.15s;
+}
+.meta-field input:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 2px rgba(46,117,182,0.12); }
+.meta-field input[readonly] { background: #f2f2f0; color: var(--ink-muted); cursor: default; }
+.meta-field input[readonly]:focus { border-color: var(--border); box-shadow: none; }
+.meta-field.full { grid-column: 1 / -1; }
+.meta-field .date-row { display: flex; gap: 5px; align-items: center; }
+.today-btn { font-size: 11px; padding: 3px 8px; border: 1px solid var(--accent); background: var(--accent-pale); color: var(--accent); border-radius: 4px; cursor: pointer; white-space: nowrap; font-family: var(--sans); }
+.today-btn:hover { background: var(--accent); color: #fff; }
+.format-hint { font-size: 10px; color: var(--ink-muted); font-weight: 400; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+/* ── Section headings ────────────────────────────────────────────── */
+/* ── Main section headings ───────────────────────────────────────── */
+.section-header {
+  border-bottom: 2px solid var(--accent-light);
+  margin: 10px 0 0;
+  padding-bottom: 7px;
+  display: flex; align-items: baseline; gap: 8px;
+}
+.section-header .sec-label {
+  font-family: var(--sans); font-size: 7pt; font-weight: 400;
+  letter-spacing: 0.3px; text-transform: none; color: var(--ink-muted);
+  flex-shrink: 0;
+}
+.section-header h2 {
+  font-family: var(--serif);
+  font-size: 12pt; font-weight: 700; color: var(--accent);
+  line-height: 1.2;
+}
+
+/* ── Sub-section headings (e.g. 1A, 2B) ─────────────────────────── */
+.section-header.sub {
+  border-bottom: 1px solid #ddd;
+  margin: 7px 0 0;
+  padding-bottom: 4px;
+}
+.section-header.sub .sec-label {
+  font-family: var(--sans); font-size: 7pt; font-weight: 400;
+  letter-spacing: 0; text-transform: none; color: #bbb;
+}
+.section-header.sub h2 {
+  font-family: var(--sans);
+  font-size: 9.5pt; font-weight: 600; color: var(--ink-mid);
+  line-height: 1.2;
+}
+
+
+/* ── Instruction block (collapsible) ─────────────────────────────── */
+.instr-block { margin: 4px 0; }
+.instr-toggle {
+  display: flex; align-items: center; gap: 7px;
+  cursor: pointer;
+  font-size: 8.5pt; font-weight: 600;
+  color: var(--accent-mid);
+  user-select: none;
+  padding: 1px 0;
+  width: fit-content;
+}
+.instr-toggle:hover { color: var(--accent); }
+.instr-toggle .chevron {
+  width: 14px; height: 14px; flex-shrink: 0;
+  transition: transform 0.2s;
+  fill: currentColor;
+}
+.instr-toggle.open .chevron { transform: rotate(90deg); }
+.instr-content {
+  display: block;
+  margin-top: 8px;
+  padding: 14px 16px;
+  background: #fafaf8;
+  border: 1px solid #e4e4e0;
+  border-radius: 4px;
+  font-size: 9.5pt;
+  line-height: 1.7;
+  color: var(--ink-mid);
+}
+.instr-content.collapsed { display: none; }
+.instr-content p { margin-bottom: 8px; }
+.instr-content p:last-child { margin-bottom: 0; }
+.instr-content ol, .instr-content ul { padding-left: 20px; margin-bottom: 8px; }
+.instr-content li { margin-bottom: 4px; }
+.instr-content code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding: 1px 5px; border-radius: 2px; color: var(--accent); }
+.instr-content table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9pt; }
+.instr-content thead tr { background: var(--accent); color: #fff; }
+.instr-content th, .instr-content td { padding: 6px 10px; border: 1px solid #ddd; text-align: left; }
+.instr-content tbody tr:nth-child(even) { background: #f5f5f2; }
+.instr-content .callout { padding: 10px 14px; border-radius: 3px; margin: 8px 0; font-size: 9pt; }
+.instr-content .callout.warn { background: var(--warn-bg); border-left: 3px solid #c0714a; color: var(--warn-dark); }
+.instr-content .callout.info { background: var(--accent-pale); border-left: 3px solid var(--accent-mid); }
+.instr-content .callout.yellow { background: var(--yellow-bg); border-left: 3px solid #d4a800; color: var(--yellow-dark); }
+.instr-content .callout-label { font-size: 7.5pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px; opacity: 0.7; }
+.instr-content .decision-ps { color: var(--green-dark); font-weight: 600; }
+.instr-content .decision-ci { color: var(--warn-dark); font-weight: 600; }
+
+/* ── Question blocks ─────────────────────────────────────────────── */
+.q-block {
+  margin: 9px 0;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.q-header {
+  background: #f7f7f5;
+  padding: 10px 14px;
+  font-size: 8pt; font-weight: 700;
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--ink-muted);
+  border-bottom: 1px solid var(--border);
+}
+.q-body { padding: 9px 13px; }
+.q-label {
+  font-size: 9pt; font-weight: 600; color: var(--ink);
+  margin-bottom: 7px; line-height: 1.4;
+}
+
+/* checkbox options */
+.cb-options { display: flex; flex-direction: column; gap: 6px; }
+.cb-option {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  background: #fff;
+  position: relative;
+}
+.cb-option:hover { border-color: var(--accent-light); background: var(--accent-pale); }
+.cb-option.selected { border-color: var(--accent-mid); background: var(--accent-pale); }
+.cb-option input[type="checkbox"] {
+  margin-top: 2px; flex-shrink: 0;
+  width: 16px; height: 16px;
+  accent-color: var(--accent-mid);
+  cursor: pointer;
+}
+.cb-option .opt-text { flex: 1; font-size: 9pt; color: var(--ink); line-height: 1.4; }
+.cb-option .route-tag {
+  font-size: 8pt; font-weight: 700;
+  padding: 3px 8px; border-radius: 3px;
+  white-space: nowrap; align-self: center;
+  opacity: 0; transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+.cb-option.selected .route-tag { opacity: 1; }
+.route-tag.go    { background: var(--accent-mid); color: #fff; }
+.route-tag.skip  { background: var(--warn-bg); color: var(--warn-dark); border: 1px solid #e8a07a; }
+.route-tag.done  { background: var(--green-bg); color: var(--green-dark); }
+.route-tag.note  { background: var(--yellow-bg); color: var(--yellow-dark); border: 1px solid #d4a800; }
+
+/* text input question */
+.q-input {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid var(--border); border-radius: 5px;
+  font-family: var(--sans); font-size: 10pt; color: var(--ink);
+  transition: border-color 0.15s;
+  resize: vertical; min-height: 38px;
+}
+.q-input:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 3px rgba(46,117,182,0.1); }
+
+/* select */
+.q-select {
+  padding: 9px 12px; border: 1.5px solid var(--border); border-radius: 5px;
+  font-family: var(--sans); font-size: 10pt; color: var(--ink);
+  background: #fff; cursor: pointer; width: 100%;
+}
+.q-select:focus { outline: none; border-color: var(--accent-mid); }
+
+/* screenshot drop zone */
+.screenshot-zone {
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+  padding: 28px;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 9pt;
+  cursor: default;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+  min-height: 90px;
+}
+.screenshot-zone:hover { border-color: var(--accent-mid); background: var(--accent-pale); }
+.screenshot-zone.has-image { border-style: solid; border-color: var(--accent-light); }
+.screenshot-zone img { max-width: 100%; max-height: 320px; border-radius: 3px; }
+.screenshot-zone:focus { outline: 2px solid var(--accent-mid); outline-offset: 2px; }
+.screenshot-zone.drag-over { border-color: var(--accent-mid); background: var(--accent-pale); }
+.screenshot-zone .zone-hint { margin-top: 6px; font-size: 8pt; color: #aaa; }
+.screenshot-delete {
+  position: absolute; top: 6px; right: 6px; z-index: 2;
+  background: rgba(0,0,0,0.55); color: #fff; border: none;
+  border-radius: 4px; padding: 3px 8px; font-size: 8.5pt;
+  cursor: pointer; font-family: var(--sans);
+}
+.screenshot-delete:hover { background: #c53030; }
+
+/* notes textarea */
+.notes-area {
+  width: 100%; min-height: 80px; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: 5px;
+  font-family: var(--sans); font-size: 9.5pt; color: var(--ink);
+  resize: vertical; line-height: 1.6;
+}
+.notes-area:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 3px rgba(46,117,182,0.1); }
+
+/* completion marker */
+.complete-marker {
+  margin: 20px 0;
+  padding: 12px 18px;
+  background: var(--green-bg);
+  border: 1.5px solid #a8d08d;
+  border-radius: 5px;
+  color: var(--green-dark);
+  font-weight: 700; font-size: 10pt;
+  text-align: center;
+}
+
+/* section divider */
+.section-divider {
+  border: none; border-top: 1px solid #e0e0da;
+  margin: 12px 0;
+}
+
+/* conditional section visibility */
+.conditional-section { display: none; }
+.conditional-section.visible { display: block; }
+
+/* empty state */
+#empty-state {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100%; color: var(--ink-muted); text-align: center; padding: 40px;
+}
+#empty-state .empty-icon { font-size: 40px; margin-bottom: 16px; opacity: 0.4; }
+#empty-state h3 { font-family: var(--serif); font-size: 16pt; color: var(--ink-mid); margin-bottom: 8px; }
+#empty-state p { font-size: 10pt; max-width: 360px; line-height: 1.6; }
+
+/* Add paper modal */
+#modal-overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45); z-index: 100;
+  align-items: center; justify-content: center;
+}
+#modal-overlay.open { display: flex; }
+#modal {
+  background: #fff; border-radius: 8px; padding: 28px;
+  width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+#modal h3 { font-family: var(--serif); font-size: 14pt; color: var(--accent); margin-bottom: 16px; }
+#modal label { display: block; font-size: 8.5pt; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+#modal input {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid var(--border); border-radius: 5px;
+  font-family: var(--sans); font-size: 10pt; color: var(--ink); margin-bottom: 14px;
+}
+#modal input:focus { outline: none; border-color: var(--accent-mid); }
+.modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
+.modal-btn {
+  padding: 8px 18px; border-radius: 5px; border: none;
+  font-family: var(--sans); font-size: 9pt; font-weight: 600; cursor: pointer;
+}
+.modal-btn.cancel { background: #f0f0ee; color: var(--ink-mid); }
+.modal-btn.confirm { background: var(--accent); color: #fff; }
+.modal-btn.confirm:hover { background: var(--accent-mid); }
+
+code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding: 1px 5px; border-radius: 2px; color: var(--accent); }
+
+/* ── Login overlay ───────────────────────────────────────────────── */
+#login-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg-sidebar);
+  display: flex; align-items: center; justify-content: center;
+}
+#login-card {
+  background: #fff; border-radius: 10px; padding: 40px 44px;
+  width: 420px; box-shadow: 0 24px 64px rgba(0,0,0,0.35);
+}
+#login-card .login-title {
+  font-family: var(--serif); font-size: 17pt; font-weight: 700;
+  color: var(--accent); margin-bottom: 4px;
+}
+#login-card .login-sub {
+  font-size: 9pt; color: var(--ink-muted); letter-spacing: 0.5px;
+  text-transform: uppercase; margin-bottom: 28px;
+}
+#login-card label {
+  display: block; font-size: 8.5pt; font-weight: 700;
+  color: var(--ink-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 6px;
+}
+#login-coder-id {
+  width: 100%; padding: 10px 13px;
+  border: 1.5px solid var(--border); border-radius: 5px;
+  font-family: var(--sans); font-size: 11pt; color: var(--ink);
+  margin-bottom: 8px;
+}
+#login-coder-id:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 3px rgba(46,117,182,0.12); }
+#login-coder-id.error { border-color: #c0392b; }
+#login-btn {
+  width: 100%; padding: 11px; margin-top: 10px;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 5px;
+  font-family: var(--sans); font-size: 10.5pt; font-weight: 700;
+  cursor: pointer; transition: background 0.15s;
+}
+#login-btn:hover { background: var(--accent-mid); }
+#login-note {
+  margin-top: 16px; font-size: 8.5pt; color: var(--ink-muted);
+  line-height: 1.6; text-align: center;
+}
+.login-divider {
+  display: flex; align-items: center; gap: 10px;
+  margin: 20px 0 14px; font-size: 8pt; color: var(--ink-muted);
+}
+.login-divider::before, .login-divider::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+.login-upload-label {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 9px;
+  border: 1.5px dashed var(--border); border-radius: 5px;
+  font-size: 9pt; color: var(--ink-muted); cursor: pointer;
+  transition: all 0.15s;
+}
+.login-upload-label:hover { border-color: var(--accent-mid); color: var(--accent); background: var(--accent-pale); }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<!-- ── Login overlay ──────────────────────────────────────────────── -->
+<div id="login-overlay">
+  <div id="login-card">
+    <div class="login-title">Reproducibility Protocol</div>
+    <div class="login-sub">Phase 1 · Paper Assessment</div>
+    <label for="login-coder-id">Your Coder ID</label>
+    <input id="login-coder-id" placeholder="e.g. coder01" autocomplete="off" />
+    <div id="login-batch-section">
+      <p id="login-batch-msg" style="margin:14px 0 10px;font-size:8.5pt;color:var(--ink-muted);line-height:1.6;text-align:center;">Before continuing, please upload the paper batch that was provided to you by the project manager. This is the file in your folder with a .JSON extension.</p>
+      <label class="login-upload-label">
+        📂 Upload batch file (.json)
+        <input type="file" accept=".json" style="display:none" onchange="restoreFromBackup(this)">
+      </label>
+    </div>
+    <p id="login-note">Your progress is saved automatically in this browser. You can close and return anytime.</p>
+    <button id="login-btn" onclick="startSession()">Start →</button>
+    <div id="login-restore-section" style="display:none">
+      <div class="login-divider">resuming on a new device? restore a backup</div>
+      <label class="login-upload-label">
+        📂 Upload backup file (.json)
+        <input type="file" accept=".json" style="display:none" onchange="restoreFromBackup(this)">
+      </label>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+
+  <!-- ── Sidebar ──────────────────────────────────────────────────── -->
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div>
+          <div class="title">Reproducibility Protocol</div>
+          <div class="subtitle">Phase 1 &middot; Paper Assessment</div>
+          <div class="subtitle" id="sidebar-coder" style="margin-top:4px;opacity:0.7;"></div>
+        </div>
+        <button id="sidebar-toggle" onclick="toggleSidebar()" title="Collapse sidebar">&#x276E;</button>
+      </div>
+    </div>
+    <div id="paper-list-header">Papers</div>
+    <div id="paper-list"></div>
+    <button id="add-paper-btn">+ Add paper</button>
+  </div>
+
+  <!-- ── Main ────────────────────────────────────────────────────── -->
+  <div id="main">
+    <div id="topbar">
+      <div class="paper-heading" id="topbar-title">Select a paper</div>
+      <span id="saved-indicator">✓ Saved</span>
+      <button class="top-btn" id="ref-toggle-btn" onclick="toggleRefPanel()">Hide/Show Report</button>
+      <button class="top-btn" id="collapse-btn" onclick="toggleAllInstructions()">Collapse all instructions</button>
+
+      <button class="top-btn" id="download-btn">⬇ Download backup</button>
+    </div>
+
+    <div id="work-area">
+      <!-- ── Form area ────────────────────────────────────────────── -->
+      <div id="content-area-wrap">
+      <div id="content-area">
+      <div id="empty-state">
+        <div class="empty-icon">📄</div>
+        <h3>No paper selected</h3>
+        <p>Select a paper from the sidebar to begin the protocol.</p>
+      </div>
+      <div id="protocol-form" style="display:none;">
+        <div class="doc-card" id="form-body"></div>
+      </div>
+      </div> <!-- /#content-area -->
+      <button class="scroll-arrow-btn" id="scroll-up-btn" title="Scroll up" onclick="document.getElementById('content-area').scrollBy({top:-200,behavior:'smooth'})">&#9650;</button>
+      <button class="scroll-arrow-btn" id="scroll-down-btn" title="Scroll down" onclick="document.getElementById('content-area').scrollBy({top:200,behavior:'smooth'})">&#9660;</button>
+      </div> <!-- /#content-area-wrap -->
+
+      <!-- ── Reference panel ──────────────────────────────────────── -->
+      <div id="ref-panel">
+        <div id="ref-panel-header">
+          <span>📋 Links and Keyword Report</span>
+          <button id="ref-newtab-btn" onclick="openRefInTab()">↗ Open in new tab</button>
+        </div>
+        <iframe id="ref-iframe" src="support_file.html"></iframe>
+      </div>
+    </div> <!-- /#work-area -->
+  </div> <!-- /#main -->
+</div> <!-- /#app -->
+
+<!-- ── Add paper modal ────────────────────────────────────────────── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h3>Add New Paper</h3>
+    <label>Paper ID / Batch Number</label>
+    <input id="modal-id" placeholder="e.g. P001" />
+    <label>Short title (for sidebar)</label>
+    <input id="modal-title" placeholder="e.g. Smith et al. (2021)" />
+    <div class="modal-btns">
+      <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
+      <button class="modal-btn confirm" id="modal-confirm">Add Paper</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Config — fill in SHEETS_URL after deploying the Apps Script
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+const SHEETS_URL = ''; // optional: paste an Apps Script Web App URL here to also save to Google Sheets
+let activeCoderId = null; // set at login (Step 1)
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Storage helpers (in-memory + localStorage backup)
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+const store = {};  // { paperId: { ...formData } }
+
+function saveData(paperId, data) {
+  store[paperId] = { ...(store[paperId] || {}), ...data };
+  // Screenshots are kept in memory only — excluded from localStorage to avoid quota issues
+  try {
+    const { _screenshot, ...forStorage } = store[paperId];
+    localStorage.setItem('proto_' + paperId, JSON.stringify(forStorage));
+  } catch(e) {}
+}
+function loadData(paperId) {
+  if (!store[paperId]) {
+    try {
+      const raw = localStorage.getItem('proto_' + paperId);
+      if (raw) store[paperId] = JSON.parse(raw);
+    } catch(e) {}
+  }
+  return store[paperId] || {};
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Login
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function startSession() {
+  const input = document.getElementById('login-coder-id');
+  const id = input.value.trim();
+  if (!id) {
+    input.classList.add('error');
+    input.focus();
+    setTimeout(() => input.classList.remove('error'), 1200);
+    return;
+  }
+  activeCoderId = id;
+  try { localStorage.setItem('proto_coder_id', id); } catch(e) {}
+  document.getElementById('sidebar-coder').textContent = 'Coder: ' + id;
+
+  // Restore papers list from previous session
+  loadPapers();
+  if (papers.length > 0) renderSidebar();
+
+  document.getElementById('login-overlay').style.display = 'none';
+}
+
+document.getElementById('login-coder-id').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startSession();
+});
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Backup — download JSON / restore from JSON
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+async function downloadBackup() {
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const coderStr = activeCoderId || 'coder';
+
+  // ── 1. JSON backup (no screenshots) ──────────────────────────────
+  const records = papers.map(p => {
+    const { _screenshot, ...rest } = loadData(p.id);
+    return { coder_id: activeCoderId || '', paper_id: p.id, paper_title: p.title, ...rest };
+  });
+  const backup = { coder_id: activeCoderId || '', exported: new Date().toISOString(), papers, records };
+  const jsonBlob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+  const jsonUrl = URL.createObjectURL(jsonBlob);
+  const jsonLink = document.createElement('a');
+  jsonLink.href = jsonUrl;
+  jsonLink.download = `backup_${coderStr}_${dateStr}.json`;
+  jsonLink.click();
+  URL.revokeObjectURL(jsonUrl);
+
+  // ── 2. Screenshots ZIP (only if any screenshots exist) ───────────
+  const papersWithScreenshots = papers.filter(p => loadData(p.id)._screenshot);
+  if (papersWithScreenshots.length === 0) return;
+
+  const zip = new JSZip();
+  papersWithScreenshots.forEach(p => {
+    const src = loadData(p.id)._screenshot;
+    const ext = (src.match(/data:image\/(\w+);base64,/) || [])[1] || 'png';
+    zip.file(`${p.id}_ITR_screenshot.${ext}`, src.split(',')[1], { base64: true });
+  });
+
+  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const zipUrl = URL.createObjectURL(zipBlob);
+  const zipLink = document.createElement('a');
+  zipLink.href = zipUrl;
+  zipLink.download = `screenshots_${coderStr}_${dateStr}.zip`;
+  setTimeout(() => { zipLink.click(); URL.revokeObjectURL(zipUrl); }, 300);
+}
+
+function restoreFromBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const backup = JSON.parse(e.target.result);
+      if (backup.papers) {
+        papers = backup.papers;
+        savePapers();
+      }
+      if (backup.records) {
+        backup.records.forEach(r => {
+          const { coder_id, paper_id, paper_title, ...data } = r;
+          saveData(paper_id, data);
+        });
+      }
+      if (backup.coder_id) {
+        document.getElementById('login-coder-id').value = backup.coder_id;
+      }
+      const n = papers.length;
+      document.getElementById('login-note').textContent =
+        `Backup restored (${n} paper${n !== 1 ? 's' : ''}). Click Start to continue.`;
+    } catch(err) {
+      alert('Could not read this file. Make sure it is a backup downloaded from this app.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Papers persistence
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function savePapers() {
+  try { localStorage.setItem('proto_papers', JSON.stringify(papers)); } catch(e) {}
+}
+function loadPapers() {
+  try {
+    const raw = localStorage.getItem('proto_papers');
+    if (raw) papers = JSON.parse(raw);
+  } catch(e) {}
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// State
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+let papers = [];   // [{ id, title }]
+let activePaperId = null;
+let saveTimer = null;
+let instrCollapsed = false;
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Paper list helpers
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function toggleSidebar(forceCollapsed) {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  const collapsed = forceCollapsed !== undefined ? forceCollapsed : !sidebar.classList.contains('collapsed');
+  sidebar.classList.toggle('collapsed', collapsed);
+  if (btn) { btn.innerHTML = collapsed ? '&#x276F;' : '&#x276E;'; btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar'; }
+  try { localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+
+function renderSidebar() {
+  const list = document.getElementById('paper-list');
+  list.innerHTML = '';
+  papers.forEach(p => {
+    const data = loadData(p.id);
+    const filled = Object.keys(data).filter(k => data[k] !== '' && data[k] !== false && data[k] !== null).length;
+    const hasAny = filled > 0;
+    const div = document.createElement('div');
+    div.className = 'paper-item' + (p.id === activePaperId ? ' active' : '');
+    div.dataset.id = p.id;
+    div.innerHTML = `
+      <div class="paper-num">${papers.indexOf(p) + 1}</div>
+      <div class="paper-label">
+        <div class="paper-title-short">${p.title}</div>
+        <div class="paper-status">${p.id}</div>
+      </div>
+      <div class="status-dot ${loadData(p.id)._complete ? 'complete' : hasAny ? 'partial' : ''}"></div>
+    `;
+    div.addEventListener('click', () => selectPaper(p.id));
+    list.appendChild(div);
+  });
+}
+
+function selectPaper(id) {
+  activePaperId = id;
+  renderSidebar();
+  const p = papers.find(x => x.id === id);
+  document.getElementById('topbar-title').innerHTML =
+    `${p.title} <span>${p.id}</span>`;
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('protocol-form').style.display = 'block';
+  saveData(id, { meta_reproducer: activeCoderId || '' });
+  buildForm(id);
+  applyInstrState();
+  document.getElementById('content-area').scrollTop = 0;
+  updateRefPanel(id);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Reference panel
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Replicates Pandoc/Quarto's auto-generated heading anchor: lowercase, drop
+// everything except letters/digits/_/./- and spaces, then collapse
+// whitespace runs to single hyphens. Must match "## <ID>. <title>" headings
+// as written by script 3 into support_file.html (e.g. "P001. Some Title" ->
+// "p001.-some-title"), so the anchor is built from ID + title together, not
+// the title alone.
+function pandocHeadingId(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9_.\- ]+/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+let _refAnchor = '';
+
+function updateRefPanel(paperId) {
+  const iframe = document.getElementById('ref-iframe');
+  if (!iframe) return;
+  const data = paperId ? loadData(paperId) : {};
+  const anchor = data.meta_title ? pandocHeadingId(`${paperId}. ${data.meta_title}`) : '';
+  _refAnchor = anchor;
+  const newSrc = 'support_file.html' + (anchor ? '#' + anchor : '');
+  const isHashOnlyChange = iframe.src.split('#')[0].endsWith('support_file.html');
+  iframe.src = newSrc;
+  if (isHashOnlyChange) {
+    // Changing only the #hash on an already-loaded iframe doesn't fire a fresh
+    // 'load' event, so re-apply the isolation styling directly here too.
+    isolateRefSection();
+  }
+}
+
+// Hide every paper section except the one matching _refAnchor, so the coder
+// can't scroll to an adjacent paper's report by accident. Applied at runtime
+// only (nothing is written back to support_file.html); silently no-ops if the
+// browser blocks cross-document access (e.g. plain file:// without a local server).
+function isolateRefSection() {
+  if (!_refAnchor) return;
+  const iframe = document.getElementById('ref-iframe');
+  if (!iframe) return;
+  try {
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+    const target = doc.getElementById(_refAnchor);
+    if (!target) return;
+    let style = doc.getElementById('_coder_isolate_style');
+    if (!style) {
+      style = doc.createElement('style');
+      style.id = '_coder_isolate_style';
+      doc.head.appendChild(style);
+    }
+    style.textContent = `section.level2:not(#${CSS.escape(_refAnchor)}) { display: none !important; }
+      #quarto-margin-sidebar { display: none !important; }`;
+  } catch (e) {
+    // Cross-origin restriction — fall back to the unfiltered anchor-scroll view.
+  }
+}
+
+function openRefInTab() {
+  const iframe = document.getElementById('ref-iframe');
+  window.open(iframe.src, '_blank');
+  // Collapse the panel so the freed space goes to the form
+  const panel = document.getElementById('ref-panel');
+  if (!panel.classList.contains('hidden')) toggleRefPanel();
+}
+
+function toggleRefPanel() {
+  const panel = document.getElementById('ref-panel');
+  const handle = document.getElementById('resize-handle');
+  const btn = document.getElementById('ref-toggle-btn');
+  const hidden = panel.classList.toggle('hidden');
+  handle.style.display = hidden ? 'none' : '';
+  btn.textContent = 'Hide/Show Report';
+}
+
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Auto-save
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function triggerSave() {
+  if (!activePaperId) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    collectAndSave();
+    showSavedIndicator();
+  }, 800);
+}
+
+function collectAndSave() {
+  if (!activePaperId) return;
+  const form = document.getElementById('form-body');
+  const data = {};
+  const cbGroups = new Set();
+  form.querySelectorAll('[data-key]').forEach(el => {
+    if (el.type === 'checkbox') cbGroups.add(el.dataset.group);
+    else data[el.dataset.key] = el.value;
+  });
+  // Checkbox groups: null on every option until one is selected, so "not yet
+  // answered" is distinguishable from "this option wasn't the one selected".
+  cbGroups.forEach(group => {
+    const opts = form.querySelectorAll(`[data-group="${group}"]`);
+    const answered = Array.from(opts).some(o => o.checked);
+    opts.forEach(o => { data[o.dataset.key] = answered ? o.checked : null; });
+  });
+  // screenshot stored separately
+  saveData(activePaperId, data);
+  saveData(activePaperId, { _complete: isFormComplete() });
+  renderSidebar();
+  if (SHEETS_URL) saveToSheets(activePaperId, data);
+}
+
+function saveToSheets(paperId, data) {
+  if (!SHEETS_URL) return;
+  fetch(SHEETS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({
+      timestamp: new Date().toISOString(),
+      coder_id: activeCoderId || '',
+      paper_id: paperId,
+      ...data
+    })
+  }).catch(() => {});
+}
+
+function showSavedIndicator() {
+  const ind = document.getElementById('saved-indicator');
+  ind.classList.add('show');
+  setTimeout(() => ind.classList.remove('show'), 2000);
+}
+
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Download backup button
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+document.getElementById('download-btn').addEventListener('click', downloadBackup);
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Add paper modal
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+document.getElementById('add-paper-btn').addEventListener('click', () => {
+  document.getElementById('modal-id').value = `P${String(papers.length + 1).padStart(3,'0')}`;
+  document.getElementById('modal-title').value = '';
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('modal-title').focus();
+});
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
+document.getElementById('modal-confirm').addEventListener('click', () => {
+  const id = document.getElementById('modal-id').value.trim();
+  const title = document.getElementById('modal-title').value.trim() || id;
+  if (!id) return;
+  if (papers.find(p => p.id === id)) { alert('Paper ID already exists.'); return; }
+  papers.push({ id, title });
+  savePapers();
+  closeModal();
+  renderSidebar();
+  selectPaper(id);
+});
+document.getElementById('modal-id').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modal-confirm').click(); });
+document.getElementById('modal-title').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modal-confirm').click(); });
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Form builder helpers
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function instr(toggleLabel, ...htmlParts) {
+  const id = 'instr_' + Math.random().toString(36).slice(2);
+  return `
+    <div class="instr-block">
+      <div class="instr-toggle open" onclick="toggleInstr('${id}',this)">
+        <svg class="chevron" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>
+        ${toggleLabel}
+      </div>
+      <div class="instr-content" id="${id}">
+        ${htmlParts.join('')}
+      </div>
+    </div>`;
+}
+
+function qBlock(id, label, bodyHtml) {
+  return `
+    <div class="q-block">
+      <div class="q-header">${id}</div>
+      <div class="q-body">
+        <div class="q-label">${label}</div>
+        ${bodyHtml}
+      </div>
+    </div>`;
+}
+
+function cbOptions(qKey, options) {
+  // options: [{ text, route, routeClass, value }]
+  return `<div class="cb-options">${options.map(o => `
+    <label class="cb-option" id="opt_${qKey}_${o.value}">
+      <input type="checkbox" data-key="${qKey}_${o.value}" data-group="${qKey}" data-value="${o.value}"
+             onchange="handleCbChange(this)">
+      <span class="opt-text">${o.text}</span>
+      ${o.route ? `<span class="route-tag ${o.routeClass || 'go'}">${o.route}</span>` : ''}
+    </label>`).join('')}</div>`;
+}
+
+function textInput(key, placeholder='', multiline=false) {
+  if (multiline) return `<textarea class="q-input notes-area" data-key="${key}" placeholder="${placeholder}" oninput="triggerSave()" rows="3"></textarea>`;
+  return `<input type="text" class="q-input" data-key="${key}" placeholder="${placeholder}" oninput="triggerSave()">`;
+}
+
+function selectInput(key, options) {
+  return `<select class="q-select" data-key="${key}" onchange="triggerSave()">
+    <option value="">— Select —</option>
+    ${options.map(o => `<option value="${o}">${o}</option>`).join('')}
+  </select>`;
+}
+
+function condSection(id, content) {
+  return `<div class="conditional-section" id="${id}">${content}</div>`;
+}
+
+function completionMarker(text) {
+  return `<div class="complete-marker">✓ &nbsp;${text}</div>`;
+}
+
+function subsec(title) {
+  return `<div class="subsection-header">${title}</div>`;
+}
+
+function secHeader(label, title) {
+  const isSub = /[A-Z]$/.test(label);
+  return `<div class="section-header${isSub ? ' sub' : ''}"><span class="sec-label">${label}</span><h2>${title}</h2></div>`;
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Checkbox logic
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function handleCbChange(el) {
+  // Within a radio-style group (same data-group), only one can be checked
+  // EXCEPT for Section 2B reasons (multiple allowed — marked with data-multi)
+  const group = el.dataset.group;
+  const isMulti = el.dataset.multi === 'true';
+
+  if (!isMulti) {
+    // uncheck siblings
+    document.querySelectorAll(`[data-group="${group}"]`).forEach(cb => {
+      if (cb !== el) {
+        cb.checked = false;
+        cb.closest('.cb-option').classList.remove('selected');
+      }
+    });
+  }
+  el.closest('.cb-option').classList.toggle('selected', el.checked);
+
+  // Routing visibility
+  updateRouting();
+  triggerSave();
+}
+
+function updateRouting() {
+  // Q1 (supplementary materials found?) → show Section 1B or jump to 2B
+  const q1yes = isChecked('q1_yes');
+  const q1no  = isChecked('q1_no');
+  toggleSection('sec1b_block', q1yes);
+  toggleSection('sec2_block', q1yes || q1no);
+  // If Q1=No, go directly to 2B (skip 2A)
+  toggleSection('sec2b_block', q1no);
+
+  // Q2 (code found in materials?) → show 2A or 2B
+  const q2yes = isChecked('q2_yes');
+  const q2no  = isChecked('q2_no');
+  toggleSection('q_readme_block', q2yes);
+  if (q1yes) {
+    toggleSection('sec2a_block', q2yes);
+    toggleSection('sec2b_block', q2no);
+  }
+
+  // Q4 sufficiency (internal key q3) → show/hide Q6 language block, Section 3, completion marker
+  const q3ps = isChecked('q3_ps');
+  const q3ci = isChecked('q3_ci');
+  const q3un = isChecked('q3_un');
+  toggleSection('q5_block', q3ps);
+  toggleSection('sec3_block', q3ps || q3un);
+  toggleSection('ci_complete', q3ci);
+
+  // Q — ITR in main paper → show 3C (no) or 3B (yes)
+  const qItrMainYes = isChecked('q_itr_main_yes');
+  const qItrMainNo  = isChecked('q_itr_main_no');
+  toggleSection('sec3c_block', qItrMainNo);
+
+  // Q — ITR in supplementary → show completion marker (no) or 3B (yes)
+  const qItrSuppYes = isChecked('q_itr_supp_yes');
+  const qItrSuppNo  = isChecked('q_itr_supp_no');
+  toggleSection('no_itr_complete', qItrSuppNo);
+
+  // Section 3B shown if ITR found in either location
+  toggleSection('sec3b_block', qItrMainYes || qItrSuppYes);
+
+  // Link to supplement only relevant if the ITR was found in the supplement
+  toggleSection('itr_supp_link_block', qItrSuppYes);
+
+  // Q6 "Other" language → show open answer field
+  toggleSection('q5_other_block', isChecked('q5_other'));
+
+}
+
+function isChecked(key) {
+  const el = document.querySelector(`[data-key="${key}"]`);
+  return el ? el.checked : false;
+}
+
+function toggleSection(id, visible) {
+  const el = document.getElementById(id);
+  if (el) el.classList.toggle('visible', visible);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Toggle all instructions (topbar button)
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function toggleAllInstructions() {
+  instrCollapsed = !instrCollapsed;
+  applyInstrState();
+}
+
+function applyInstrState() {
+  const btn = document.getElementById('collapse-btn');
+  document.querySelectorAll('.instr-content').forEach(el => {
+    el.classList.toggle('collapsed', instrCollapsed);
+  });
+  document.querySelectorAll('.instr-toggle').forEach(el => {
+    el.classList.toggle('open', !instrCollapsed);
+  });
+  btn.textContent = instrCollapsed ? 'Expand all instructions' : 'Collapse all instructions';
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Instruction toggle
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function toggleInstr(id, toggle) {
+  const content = document.getElementById(id);
+  const isCollapsed = content.classList.toggle('collapsed');
+  toggle.classList.toggle('open', !isCollapsed);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Validation & continue
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function inVisibleSection(el) {
+  let node = el.parentElement;
+  while (node && node !== document.body) {
+    if (node.classList.contains('conditional-section') && !node.classList.contains('visible')) return false;
+    node = node.parentElement;
+  }
+  return true;
+}
+
+function fillToday() {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yy = String(now.getFullYear()).slice(-2);
+  const el = document.querySelector('[data-key="meta_date"]');
+  if (el) { el.value = `${dd}/${mm}/${yy}`; triggerSave(); }
+}
+
+function isFormComplete() {
+  function inputOk(key) {
+    const el = document.querySelector(`[data-key="${key}"]`);
+    if (!el || !inVisibleSection(el)) return true;
+    return !!(el.value && el.value.trim());
+  }
+  function groupOk(group) {
+    const sample = document.querySelector(`[data-group="${group}"]`);
+    if (!sample || !inVisibleSection(sample)) return true;
+    return !!document.querySelector(`[data-group="${group}"]:checked`);
+  }
+  if (!inputOk('meta_date')) return false;
+  if (!groupOk('q1')) return false;
+  if (!groupOk('q2')) return false;
+  if (!groupOk('q_readme')) return false;
+  if (!groupOk('q3')) return false;
+  if (!inputOk('q4_source_0')) return false;
+  if (!inputOk('q4_link_0')) return false;
+  const q5sample = document.querySelector('[data-group="q5_langs"]');
+  if (q5sample && inVisibleSection(q5sample)) {
+    if (!document.querySelector('[data-group="q5_langs"]:checked')) return false;
+  }
+  if (!groupOk('q6')) return false;
+  const sec3 = document.getElementById('sec3_block');
+  if (sec3 && sec3.classList.contains('visible')) {
+    if (!groupOk('q_itr_main')) return false;
+    const sec3c = document.getElementById('sec3c_block');
+    if (sec3c && sec3c.classList.contains('visible')) {
+      if (!groupOk('q_itr_supp')) return false;
+    }
+    const sec3b = document.getElementById('sec3b_block');
+    if (sec3b && sec3b.classList.contains('visible')) {
+      if (!inputOk('itr_value')) return false;
+      if (!inputOk('itr_page')) return false;
+      if (!inputOk('itr_table_num')) return false;
+    }
+  }
+  return true;
+}
+
+function validateForm() {
+  document.querySelectorAll('.req-error').forEach(el => el.classList.remove('req-error'));
+  document.querySelectorAll('.req-error-group').forEach(el => el.classList.remove('req-error-group'));
+
+  const errors = [];
+  const labels = [];
+
+  function labelFor(el) {
+    const qHeader = el.closest('.q-block')?.querySelector('.q-header');
+    if (qHeader) return qHeader.textContent.trim();
+    const metaLabel = el.closest('.meta-field')?.querySelector('label');
+    if (metaLabel) return metaLabel.textContent.trim();
+    return null;
+  }
+
+  function addLabel(el) {
+    const label = labelFor(el);
+    if (label && !labels.includes(label)) labels.push(label);
+  }
+
+  function requireInput(key) {
+    const el = document.querySelector(`[data-key="${key}"]`);
+    if (!el || !inVisibleSection(el)) return;
+    if (!el.value || !el.value.trim()) { el.classList.add('req-error'); errors.push(key); addLabel(el); }
+  }
+
+  function requireGroup(group) {
+    const sample = document.querySelector(`[data-group="${group}"]`);
+    if (!sample || !inVisibleSection(sample)) return;
+    if (!document.querySelector(`[data-group="${group}"]:checked`)) {
+      const container = sample.closest('.cb-options');
+      if (container) container.classList.add('req-error-group');
+      errors.push(group);
+      addLabel(sample);
+    }
+  }
+
+  // Metadata
+  requireInput('meta_date');
+
+  // Q1
+  requireGroup('q1');
+
+  // Q2 (sec1b_block)
+  requireGroup('q2');
+
+  // Q3 (README, sec1b_block)
+  requireGroup('q_readme');
+
+  // Q4, Q5 (sec2a_block)
+  requireGroup('q3');
+  requireInput('q4_source_0');
+  requireInput('q4_link_0');
+
+  // Q6 (q5_block inside sec2a_block)
+  const q5sample = document.querySelector('[data-group="q5_langs"]');
+  if (q5sample && inVisibleSection(q5sample)) {
+    if (!document.querySelector('[data-group="q5_langs"]:checked')) {
+      const langBox = document.getElementById('q5-langs');
+      if (langBox) langBox.classList.add('req-error-group');
+      errors.push('q5_langs');
+      addLabel(q5sample);
+    }
+  }
+
+  // Q7 (sec2b_block)
+  requireGroup('q6');
+
+  // Section 3
+  const sec3 = document.getElementById('sec3_block');
+  if (sec3 && sec3.classList.contains('visible')) {
+    requireGroup('q_itr_main');
+
+    const sec3c = document.getElementById('sec3c_block');
+    if (sec3c && sec3c.classList.contains('visible')) {
+      requireGroup('q_itr_supp');
+
+    const sec3b = document.getElementById('sec3b_block');
+    if (sec3b && sec3b.classList.contains('visible')) {
+      requireInput('itr_value');
+      requireInput('itr_page');
+      requireInput('itr_table_num');
+    }
+  }
+  }
+
+  return { errors, labels };
+}
+
+function validateAndContinue() {
+  const { errors, labels } = validateForm();
+  const msg = document.getElementById('validation-msg');
+  const overrideBtn = document.getElementById('override-continue-btn');
+  if (errors.length > 0) {
+    msg.className = 'error';
+    msg.textContent = `${errors.length} required field${errors.length > 1 ? 's are' : ' is'} not yet filled in: ${labels.join(', ')} (highlighted in red).`;
+    document.querySelector('.req-error, .req-error-group')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (overrideBtn) overrideBtn.style.display = 'inline-block';
+    return;
+  }
+  if (overrideBtn) overrideBtn.style.display = 'none';
+  // Mark complete and move to next paper
+  saveData(activePaperId, { _complete: true });
+  advanceToNextPaper();
+}
+
+function continueAnyway() {
+  const overrideBtn = document.getElementById('override-continue-btn');
+  if (overrideBtn) overrideBtn.style.display = 'none';
+  document.getElementById('validation-msg').className = '';
+  advanceToNextPaper();
+}
+
+function advanceToNextPaper() {
+  renderSidebar();
+  const idx = papers.findIndex(p => p.id === activePaperId);
+  if (idx < papers.length - 1) {
+    selectPaper(papers[idx + 1].id);
+  } else {
+    const msg = document.getElementById('validation-msg');
+    msg.className = 'success';
+    msg.textContent = 'All papers in the batch are complete!';
+  }
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Build the full form
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function buildForm(paperId) {
+  const data = loadData(paperId);
+  const body = document.getElementById('form-body');
+
+  body.innerHTML = `
+    <!-- METADATA -->
+    <div class="meta-block">
+      <h3>Paper Identification</h3>
+      <div class="meta-grid">
+        <div class="meta-field"><label>Paper ID</label><input data-key="meta_id" value="${esc(data.meta_id)}" ${data.meta_id ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field"><label>Year</label><input data-key="meta_year" value="${esc(data.meta_year)}" ${data.meta_year ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field full"><label>Authors</label><input data-key="meta_authors" value="${esc(data.meta_authors)}" ${data.meta_authors ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field full"><label>Title</label><input data-key="meta_title" value="${esc(data.meta_title)}" ${data.meta_title ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field"><label>Journal</label><input data-key="meta_journal" value="${esc(data.meta_journal)}" ${data.meta_journal ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field"><label>DOI</label><input data-key="meta_doi" value="${esc(data.meta_doi)}" ${data.meta_doi ? 'readonly' : 'oninput="triggerSave()"'}></div>
+        <div class="meta-field"><label>Coder ID</label><input data-key="meta_reproducer" value="${esc(activeCoderId || data.meta_reproducer)}" readonly></div>
+        <div class="meta-field"><label>Date assessed <span class="format-hint">(dd/mm/yy)</span></label><div class="date-row"><input data-key="meta_date" type="text" placeholder="dd/mm/yy" maxlength="8" value="${esc(data.meta_date)}" oninput="triggerSave()"><button type="button" class="today-btn" onclick="fillToday()">Today</button></div></div>
+      </div>
+    </div>
+
+    <!-- �?�? SECTION 1 �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    ${secHeader('Section 1', 'Find Code')}
+
+    ${instr('Read instructions for Section 1',
+      `<p>The goal of this protocol is to identify whether the code that may potentially be relevant to computationally reproduce the simulations in the paper is openly available. The steps in this protocol are extensive, meaning that you might not need to take all steps to find the necessary code for all papers in your batch.</p>
+      <div class="callout warn">
+        <span class="callout-label">⬛ Stopping Criterion</span>
+        The following stopping criterion may be applied in Section 1 (i.e., both in Section 1A and Section 1B). In the following case, you may stop searching for materials or code and immediately answer Q1 and Q2 (which completes Sections 1A and 1B):
+        <ul style="margin-top:6px">
+          <li>If the paper unambiguously identifies the location where the authors aimed to store all code needed to reproduce the results for the simulations in the paper (even if the code turns out to be unavailable at that location).</li>
+        </ul>
+        <p style="margin-top:8px"><strong>Examples of paper excerpts for which the stopping criterion may be applied:</strong></p>
+        <ul style="margin-top:4px">
+          <li><em>"All the scripts for the simulations and analysis are available at the following link: https://osf.io/9dpgn/overview."</em></li>
+          <li><em>"The computer code for the simulations is available on the OSF platform (https://osf.io/mpfzu/)."</em></li>
+        </ul>
+      </div>`
+    )}
+
+    ${secHeader('Section 1A', 'Identify All Supplementary Materials')}
+
+    ${instr('Read instructions for Section 1A',
+      `<p>By the end of this section you should have... </p>
+        <ul>
+          <li>...answered Q1 ("Have the authors shared any supplementary materials?")</li>
+          <li>...opened all locations where supplementary materials may be stored, so you are ready for the next section</li>
+        </ul>
+        <p>Your answer to Q1 determines whether you proceed to Section 1B or Section 2B.</p>
+      <p>You may answer Q1 when you have worked through all steps below, or as soon as the stopping criterion is met.</p>
+      <div class="callout info">
+        <span class="callout-label">ℹ Note</span>
+        You do not need to open or evaluate the content of any materials at this stage. You DO need to follow any links or descriptions to locate where materials are hosted. Do not focus solely on code yet. We first aim to identify if ANY supplementary materials are shared (code or other types).
+      </div>`
+    )}
+
+    ${instr('Step 1A.1) Evaluate links in the Links and Keywords Report',
+      `<p>For any link identified in the Links and Keywords Report, read the context and evaluate whether the link may contain any supplemental material (including code, data, or other materials).</p>
+      <ol type="1">
+        <li>For any link that may contain code or other supplemental materials, click the link to check if materials are available at the linked location. (You do not have to open any materials yet.)</li>
+      </ol>
+      <div class="callout info">
+        <span class="callout-label">ℹ Notes</span>
+        <p>If the paper links to the paper DOI and describes that supplementary materials are shared at the website of the journal, please follow this link and identify the shared supplements at the journal webpage.</p>
+        <p>Links to OSF may not always work well at the first click. If you are redirected to the wrong OSF page (often the login page), please try clicking the link again.</p>
+      </div>`
+    )}
+
+    ${instr('Step 1A.2) Evaluate keyword matches in the Links and Keywords Report',
+      `<p>Evaluate whether any keywords that signal code sharing are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
+      <ol type="1">
+        <li>Check if there is any keyword context in which the availability of a supplement, code, or data is described. If so, use the description to locate these materials.</li>
+      </ol>`
+    )}
+
+    ${instr('Step 1A.3) Manual fallback (only if no code was found in Steps 1A.1 and 1A.2)',
+      `<p>This step is only necessary if Steps 1A.1 and 1A.2 have not led to any code, and the stopping criterion has not been reached. Please take the following steps to make sure that no code was missed:</p>
+      <ol type="1">
+        <li>Open the paper PDF and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>.</li>
+        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help.</li>
+      </ol>`
+    )}
+
+    ${qBlock('Q1', 'Have the authors shared any supplementary materials?',
+      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately.</p>
+      ${cbOptions('q1', [
+        { text: 'Yes', route: '▶ Continue to Section 1B', routeClass: 'go', value: 'yes' },
+        { text: 'No', route: '▶ Skip to Section 2B', routeClass: 'skip', value: 'no' },
+      ])}`
+    )}
+
+    <!-- �?�? SECTION 1B �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    ${condSection('sec1b_block', `
+      ${secHeader('Section 1B', 'Find Code in Materials')}
+
+      ${instr('Read instructions for Section 1B',
+        `<p>By the end of this section you should have...</p>
+        <ul>
+           <li>...answered Q2 (Is any code shared by the authors?) </li>
+           <li>...opened any supplementary materials that may contain code.</li>
+        </ul>
+        <p>In this step, we evaluate whether <u>any</u> code is shared within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code was shared in Q2. The relevance of the code will be evaluated in a later step.</p>
+        <p>Work through the steps below to answer Q2. You may answer Q2 if you worked through all steps below, or as soon as the stopping criterion is met.</p>
+        <p>Code may be shared in a code file but is sometimes also available as text in a <code>.docx</code>, <code>.txt</code>, <code>.pdf</code>, or other type of file.</p>`
+      )}
+
+      ${instr('Step 1B.1) Check for code files',
+        `<p>Check whether the shared materials include openly available code files (files with an extension that indicates code/syntax). Common code file types include but are not limited to:</p>
+        <table>
+          <thead><tr><th>Language</th><th>File type(s)</th></tr></thead>
+          <tbody>
+            <tr><td>R</td><td><code>.R</code></td></tr>
+            <tr><td>Python</td><td><code>.py</code></td></tr>
+            <tr><td>MATLAB</td><td><code>.m</code></td></tr>
+            <tr><td>C</td><td><code>.c</code>, <code>.h</code></td></tr>
+            <tr><td>C++</td><td><code>.cpp</code>, <code>.h</code>, <code>.hpp</code></td></tr>
+            <tr><td>SPSS</td><td><code>.sps</code></td></tr>
+            <tr><td>MPlus</td><td><code>.inp</code></td></tr>
+            <tr><td>Stata</td><td><code>.do</code>, <code>.ado</code></td></tr>
+            <tr><td>Julia</td><td><code>.jl</code></td></tr>
+            <tr><td>Jupyter</td><td><code>.ipynb</code></td></tr>
+            <tr><td>Shell scripts</td><td><code>.sh</code></td></tr>
+          </tbody>
+        </table>`
+      )}
+
+      ${instr('Step 1B.2) Check other materials for additional code',
+        `<p>Even if code files are available, inspect any other available materials to evaluate whether additional code might be available or linked within those files:</p>
+        <ol type="1">
+          <li>If a README or other instruction is available that outlines which files are available, you can use those directions to evaluate which files may contain code.</li>
+          <li>Open any file that may contain code to check if code is indeed available.</li>
+          <li>If no README or other instruction is available, please take the following steps (remember that the stopping criterion still applies):
+            <ul>
+              <li>Open any supplementary file and scroll through it to identify code.</li>
+              <li>Do an automatic search within any supplementary file for the keywords: <code>code</code>, <code>script</code>, <code>reproduce</code>.</li>
+            </ul>
+          </li>
+        </ol>`
+      )}
+
+      ${qBlock('Q2', 'Is any code shared by the authors?',
+        cbOptions('q2', [
+          { text: 'Yes', route: '▶ Continue to Section 2A', routeClass: 'go', value: 'yes' },
+          { text: 'No', route: '▶ Skip to Section 2B', routeClass: 'skip', value: 'no' },
+        ])
+      )}
+
+      ${condSection('q_readme_block', `
+        ${instr('How to identify a README file',
+          `<p>In the next question, please indicate if a README or similar file was shared by the authors.</p>
+          <p>A README file is a plain-text or markdown document shared with the code that explains what the project is, how it's structured, and how to use it. It typically covers things like installation/setup instructions, how to run the code, dependencies required, file/folder structure, authorship, licensing, and contact information. The README file is typically the first file the owner of the code would want you to look at for you to make sense of the code that is available.</p>
+          <ul>
+            <li>Typically, the file will be called README (or ReadMe/readme etc.).</li>
+            <li>Usually placed in the root/top-level folder of a repository or dataset, often the first file you see when opening the project.</li>
+            <li>Alternative names are sometimes used for files with the same purpose as a README file. Alternative names include (but are not limited to):
+              <ul>
+                <li><code>INSTRUCTIONS.txt</code></li>
+                <li><code>INSTALL.md</code></li>
+                <li><code>GETTING_STARTED.md</code></li>
+                <li><code>OVERVIEW.txt</code></li>
+                <li><code>ABOUT.md</code></li>
+                <li><code>index.md</code> (especially on GitHub Pages-style repos)</li>
+                <li><code>documentation.txt / docs.md</code></li>
+                <li><code>manual.pdf</code></li>
+                <li><code>notes.txt</code> (less formal, but sometimes serves this purpose)</li>
+                <li><code>codebook.txt</code> (in some data-sharing contexts, especially combined with a README role)</li>
+              </ul>
+            </li>
+            <li>Regardless of name, it will usually open with a short description of the project/purpose, followed by structured sections (setup, usage, file list, citation/license info). If a file does this, it's functioning as a README even if it's named something else.</li>
+          </ul>`
+        )}
+
+        ${qBlock('Q3', 'Is a README or similar file provided with the code?',
+          cbOptions('q_readme', [
+            { text: 'Yes', value: 'yes' },
+            { text: 'No', value: 'no' },
+            { text: 'I am not sure', value: 'unsure' },
+          ])
+        )}
+
+        ${qBlock('Notes', 'Notes',
+          `<textarea class="notes-area" data-key="q_readme_notes" placeholder="Explain if unsure, or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
+        )}
+      `)}
+    `)}
+
+    <!-- �?�? SECTION 2 �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    ${condSection('sec2_block', `<hr class="section-divider">
+      ${secHeader('Section 2', 'Evaluate Code  or  Note Reasons for Absence')}
+    `)}
+
+    <!-- 2A conditional -->
+    ${condSection('sec2a_block', `
+      ${secHeader('Section 2A', 'Evaluate Code')}
+
+      ${instr('Read instructions for Section 2A',
+        `<p>By the end of this section you should have...</p>
+        <ul>
+          <li>...answered Q4 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
+          <li>...answered Q5 (Indicate the location of the code that is potentially sufficient to reproduce the simulations in the paper.)</li>
+          <li>...answered Q6 (In which programming language(s) is the simulation code written?)</li>
+        </ul>
+        <p>In this section, we want to filter out articles for which the code that is shared is clearly not sufficient to reproduce <u>the simulations</u> in the article. We also want to know which programming language is used for the simulation code, and where the code is stored.</p>
+        <div class="callout yellow">
+          <span class="callout-label">⚠ Be Conservative</span>
+          Please be conservative in answering Q4. Any code that could potentially be used to reproduce (part of) the simulations in the paper should be indicated as potentially sufficient. Only in cases where the code is <u>clearly and unambiguously</u> insufficient to reproduce the simulations should you indicate the code as being insufficient.
+        </div>
+        <p>Take the following steps:</p>
+        <ol type="1">
+          <li>If a README or similar instruction is available, read through it to familiarize yourself with the context of the shared files.</li>
+          <li>Open any file containing code that you found in the previous steps that may be relevant to reproducing the simulations.
+            <ul>
+              <li>Files can often be inspected in online viewers in the repository where they are shared. You do not have to download the files.</li>
+              <li>If you cannot open or evaluate a relevant file due to its filetype (and an online viewer is not available), please indicate this in Q4. In this case, fill out the questions you can and continue to Section 3. A third coder will review the code for this paper.</li>
+            </ul>
+          <li>Scroll through the code files to see if there is any obvious indication that the file is irrelevant to reproduce the simulations in the paper.</li>
+        </ol>
+        <div class="callout info">
+          <span class="callout-label">ℹ Important!</span>
+          These steps should not take more than a few minutes. You should not meticulously evaluate the code. The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and belongs to the simulations reported in the paper, mark it as <u>potentially sufficient</u>, even if you notice errors that might prevent it from running.
+        </div>
+        <p style="margin-top:10px"><strong>Examples (when in doubt, evaluate the code as potentially sufficient):</strong></p>
+        <table>
+          <thead><tr><th style="width:72%">Situation</th><th>Decision</th></tr></thead>
+          <tbody>
+            <tr><td>A script in an unfamiliar language or with unclear structure, where you simply cannot tell whether it is sufficient or not</td><td class="decision-ps">Potentially sufficient</td></tr>
+            <tr><td>A script that is partially commented out or appears incomplete, but still contains recognisable simulation logic (data-generating functions, loops over conditions, calls to statistical tests)</td><td class="decision-ps">Potentially sufficient</td></tr>
+            <tr><td>A collection of loosely organised files where at least one file plausibly contains simulation logic, even if the overall organisation is unclear</td><td class="decision-ps">Potentially sufficient</td></tr>
+            <tr><td>Code shared as text in a PDF or Word file rather than as a proper code file, but where the pasted code contains simulation logic</td><td class="decision-ps">Potentially sufficient</td></tr>
+            <tr><td>Code for a completely different study or project that appears to have been shared by mistake</td><td class="decision-ci">Unambiguously insufficient</td></tr>
+            <tr><td>A README or plain text description of what the simulation does, with no actual runnable code</td><td class="decision-ci">Unambiguously insufficient</td></tr>
+            <tr><td>Code that exclusively relates to an empirical study in the same paper (e.g. processing survey data), with no simulation component whatsoever</td><td class="decision-ci">Unambiguously insufficient</td></tr>
+            <tr><td>Code for a package that is developed in the paper, but no code for applying the package to run the simulations in the paper</td><td class="decision-ci">Unambiguously insufficient</td></tr>
+          </tbody>
+        </table>`
+      )}
+
+      ${qBlock('Q4', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
+        cbOptions('q3', [
+          { text: 'Potentially sufficient', route: '▶ Complete Q5 & Q6, then go to Section 3', routeClass: 'go', value: 'ps' },
+          { text: 'Unambiguously insufficient', route: '▶ Phase 1 complete — move to next paper', routeClass: 'done', value: 'ci' },
+          { text: 'Unable to open file(s)', route: '▶ Continue to Section 3', routeClass: 'note', value: 'un' },
+        ])
+      )}
+
+      ${instr('How to determine code location and links',
+        `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If unsure, note this in the Notes box.</p>
+        <p>Please provide the most specific link to the code possible:</p>
+        <ul>
+          <li>If the code is in a repository, link to the specific folder or file rather than the repository's main page.</li>
+          <li>If the code is on the journal website, try to link directly to the supplementary file: right-click the download link on the article page and select "Copy link address." Test the link to confirm it works.</li> 
+          <li>If no direct link is available, link to the article page instead. Please copy-paste the article link as provided in the Links and Keywords Report, to prevent institution-specific paywall links being filled out.</li>
+        </ul>`
+      )}
+
+      ${qBlock('Q5', 'Location of the code',
+        `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If code is available in multiple locations, use the + button to add extra rows.</p>
+        <div id="q4-locations">
+          <div class="q4-row" style="margin-bottom:12px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
+              <div>
+                <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
+                <select class="q-select" data-key="q4_source_0" onchange="triggerSave()" style="width:100%">
+                  <option value="">— Select —</option>
+                  <option>Journal website</option>
+                  <option>External repository</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
+                <input type="text" class="q-input" data-key="q4_link_0" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+              </div>
+              <div style="padding-bottom:1px;">
+                <button onclick="addQ4Row()" style="padding:8px 12px;background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:5px;color:var(--accent);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Add another location">+</button>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
+              <textarea class="notes-area" data-key="q4_notes_0" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+            </div>
+          </div>
+        </div>`
+      )}
+
+      ${condSection('q5_block', `
+        ${qBlock('Q6', 'In which programming language(s) was the simulation conducted? (select all that apply)',
+          `<div id="q5-langs" class="cb-options">
+            ${[
+              ['q5_r',       'R'],
+              ['q5_python',  'Python'],
+              ['q5_matlab',  'MATLAB'],
+              ['q5_stata',   'Stata'],
+              ['q5_julia',   'Julia'],
+              ['q5_spss',    'SPSS'],
+              ['q5_mplus',   'MPlus'],
+              ['q5_c_cpp',   'C/C++'],
+              ['q5_shell',   'Shell'],
+              ['q5_unclear', 'Unclear'],
+              ['q5_other',   'Other'],
+            ].map(([key, label]) => `
+              <label class="cb-option">
+                <input type="checkbox" data-key="${key}" data-group="q5_langs" data-multi="true" onchange="handleCbChange(this)">
+                <span class="opt-text">${label}</span>
+              </label>`).join('')}
+          </div>
+          <div class="conditional-section" id="q5_other_block" style="margin-top:10px;">
+            <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Please specify the other language(s)</label>
+            <input type="text" class="q-input" data-key="q5_other_text" placeholder="e.g. SAS" oninput="triggerSave()" style="width:100%">
+          </div>`
+        )}
+      `)}
+
+      ${qBlock('Notes', 'Additional notes on code evaluation',
+        `<textarea class="notes-area" data-key="q5_notes" placeholder="Any additional observations about the code or its location…" oninput="triggerSave()" rows="3"></textarea>`
+      )}
+
+      ${condSection('ci_complete', completionMarker('Phase 1 complete for this paper (code unambiguously insufficient) — move to the next paper.'))}
+    `)}
+
+    <!-- 2B conditional -->
+    ${condSection('sec2b_block', `
+      ${secHeader('Section 2B', 'Reasons for Unavailable Code')}
+
+      ${instr('Read instructions for Section 2B',
+        `<p>In this section, we aim to identify the reason for code being unavailable. Please indicate which of the following applies. Multiple reasons may apply.</p>`
+      )}
+
+      ${qBlock('Q7', 'Why is code not openly available? (select all that apply)',
+        `<div class="cb-options">
+          ${[
+            ['q6_not_mentioned',  'Code sharing is not mentioned in the paper'],
+            ['q6_broken',         'Paper states that code is shared, but the link to the code is broken (leads to an error page or website does not exist)'],
+            ['q6_empty',          'Paper states that code is shared, but the code is not available at the linked location (repository is empty or contains only files not related to code)'],
+            ['q6_request',        'Code is available upon request'],
+            ['q6_restricted',     'Code is available with restricted access (you need permission before being able to access materials)'],
+            ['q6_other',          'Other (please describe why code is not available in the notes box below)'],
+          ].map(([key, text]) => `
+            <label class="cb-option" id="opt_${key}">
+              <input type="checkbox" data-key="${key}" data-group="q6" data-multi="true" onchange="handleCbChange(this)">
+              <span class="opt-text">${text}</span>
+            </label>`).join('')}
+        </div>`
+      )}
+
+      ${qBlock('Notes', 'Additional notes on unavailability',
+        `<textarea class="notes-area" data-key="q6_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
+      )}
+
+      ${completionMarker('Phase 1 complete for this paper — move to the next paper.')}
+    `)}
+
+    <!-- �?�? SECTION 3 (conditional on Q4 = PS or unable to open) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    ${condSection('sec3_block', `
+      <hr class="section-divider">
+      ${secHeader('Section 3', 'Identify Item To Reproduce (ITR)')}
+
+      ${instr('Read instructions for Section 3',
+        `<p>In this section, you will identify an Item to Reproduce (ITR): the target for reproduction in the next phase of this project. Identifying the ITR at this stage allows us to exclude papers that do not contain a usable ITR, and to keep the selection process separate from the reproduction effort itself.</p>`
+      )}
+
+      ${secHeader('Section 3A', 'Identify ITR')}
+
+      ${instr('Read instructions for Section 3A',
+        `<ol>
+          <li>Open the full-text PDF (linked in the Links and Keywords Report).</li>
+          <li>Find the first exact numerical result in a table or figure that followed from a <u>simulation study that evaluates a statistical method</u>. Work through the document from beginning to end, and work through tables and figures left to right and top to bottom (as you would read normal English text). If multiple numerical results are reported together (e.g., a mean and standard deviation in the same cell), select only the first one.</li>
+          <li>Answer the question below.</li>
+        </ol>
+        <div class="callout warn">
+          <span class="callout-label">⬛ Results vs. Fixed Parameters</span>
+          Make sure the result you select is an actual simulation result, not a fixed parameter. Simulation studies often report tables that contain fixed parameters (i.e., conditions) used in the study design. These are not results, so we do not aim to reproduce them. Fixed parameters sometimes also appear within results tables. Reading the title and notes of the table carefully can help you distinguish between the two.
+        </div>
+        <div class="callout info">
+          <span class="callout-label">ℹ Note</span>
+          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result. The result must be reported in a figure or table. In-text results do not qualify as an ITR.
+        </div>`
+      )}
+
+      ${qBlock('Q — ITR in main paper', 'Did you identify a suitable ITR in the main paper?',
+        cbOptions('q_itr_main', [
+          { text: 'Yes', route: '▶ Continue to Section 3B', routeClass: 'go', value: 'yes' },
+          { text: 'No', route: '▶ Continue to Section 3C', routeClass: 'skip', value: 'no' },
+        ])
+      )}
+
+      ${condSection('sec3c_block', `
+        <hr class="section-divider">
+        ${secHeader('Section 3C', 'No Numerical Result Found in Main Article')}
+
+        ${instr('Read instructions for Section 3C',
+          `<p>If you could not find a suitable ITR in the main article, you may identify an ITR in the supplementary materials using the same criteria as described in Section 3A.</p>
+          <ol>
+            <li>Check the Links and Keywords Report for any mentions of results in supplementary materials (keywords: <code>supplement</code>, <code>appendi</code>).</li>
+            <li>If supplementary materials with results are available, try to identify an ITR using the same steps as in Section 3A.</li>
+          </ol>
+          <p><strong>Which supplemental file to use?</strong></p>
+          <ul>
+            <li>If multiple supplemental files that contain simulation results are available, we select the file in the following order:
+              <ul>
+                <li>Work through any links to supplemental materials from top to bottom as presented in the Links and Keyword Report.</li>
+                <li>If a link contains multiple files, and a clear order is indicated, work through the files in this indicated order (e.g., Supplement_1.pdf first, then Supplement_2.pdf).</li>
+                <li>If there is no clear order in the files, work through them in alphabetical order.</li>
+              </ul>
+            </li>
+          </ul>`
+        )}
+
+        ${qBlock('Q — ITR in supplementary materials', 'Did you identify a suitable ITR in the supplementary materials?',
+          cbOptions('q_itr_supp', [
+            { text: 'Yes', route: '▶ Continue to Section 3B', routeClass: 'go', value: 'yes' },
+            { text: 'No', route: '▶ Phase 1 complete — move to next paper', routeClass: 'done', value: 'no' },
+          ])
+        )}
+        ${condSection('no_itr_complete', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
+      `)}
+
+      ${condSection('sec3b_block', `
+        <hr class="section-divider">
+        ${secHeader('Section 3B', 'Record the ITR')}
+
+        ${instr('Read instructions for Section 3B',
+          `<ol>
+            <li>Record all information about the numerical result in the fields below.</li>
+            <li>Take a screenshot that shows both the result and the caption of the table or figure. If the table or figure is too large to capture in full, include enough of it to allow easy identification later on.</li>
+            <li>Highlight the specific ITR in the screenshot, preferably in yellow. You can highlight using your PDF reader or the screenshot tool on your computer.</li>
+            <li>Paste the screenshot into the screenshot field below.</li>
+          </ol>`
+        )}
+
+        ${qBlock('ITR Details', 'Record all information about the ITR',
+          `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Result (exact numerical value)</label>
+              <input type="text" class="q-input" data-key="itr_value" placeholder="e.g. 0.87" oninput="triggerSave()" style="width:100%">
+            </div>
+            <div>
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Page number</label>
+              <input type="text" class="q-input" data-key="itr_page" placeholder="e.g. 12" oninput="triggerSave()" style="width:100%">
+            </div>
+            <div>
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Figure / Table with number</label>
+              <input type="text" class="q-input" data-key="itr_table_num" placeholder="e.g. Table 3" oninput="triggerSave()" style="width:100%">
+            </div>
+            <div class="conditional-section" id="itr_supp_link_block" style="grid-column:1/-1">
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to supplement</label>
+              <input type="text" class="q-input" data-key="itr_supp_link" placeholder="If journal supplement without specific link, paste the link to the paper itself" oninput="triggerSave()" style="width:100%">
+            </div>
+            <div style="grid-column:1/-1">
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Screenshot (highlight the ITR in yellow before uploading)</label>
+              <div class="screenshot-zone" id="screenshot-zone" tabindex="0"
+                   onpaste="handlePaste(event)"
+                   ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                   ondragleave="this.classList.remove('drag-over')"
+                   ondrop="this.classList.remove('drag-over'); handleDrop(event)">
+                <div id="screenshot-placeholder">
+                  <div style="font-size:24px;margin-bottom:6px;">🖼</div>
+                  <div>Paste screenshot here <span style="color:#bbb;font-weight:400;">(Click this box, then paste using Ctrl+V / Cmd+V)</span></div>
+                  <div class="zone-hint">Or drag and drop an image file</div>
+                </div>
+              </div>
+          </div>`
+        )}
+
+      `)}
+    `)}
+
+    <!-- �?�? GENERAL NOTES �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    <hr class="section-divider">
+    ${secHeader('General Notes', 'Comments & Observations')}
+    ${instr('When to use this box',
+      `<p>Use this box for any uncertainties or observations that do not fit the fields above.</p>`
+    )}
+    <textarea class="notes-area" data-key="general_notes" placeholder="Any additional notes…" oninput="triggerSave()" rows="5" style="margin-top:12px;width:100%;"></textarea>
+
+    <button id="continue-btn" onclick="validateAndContinue()">Continue to next paper →</button>
+    <div id="validation-msg"></div>
+    <button id="override-continue-btn" onclick="continueAnyway()">Continue anyway →</button>
+    <div style="height:40px;"></div>
+  `;
+
+  // Restore saved values
+  restoreForm(paperId);
+  updateRouting();
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Restore saved form values
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function restoreForm(paperId) {
+  const data = loadData(paperId);
+  Object.entries(data).forEach(([key, val]) => {
+    const el = document.querySelector(`[data-key="${key}"]`);
+    if (!el) return;
+    if (el.type === 'checkbox') {
+      el.checked = val === true || val === 'true';
+      if (el.checked) el.closest('.cb-option').classList.add('selected');
+    } else {
+      el.value = val;
+    }
+  });
+  // Restore screenshot if stored
+  if (data._screenshot) {
+    const zone = document.getElementById('screenshot-zone');
+    if (zone) {
+      zone.classList.add('has-image');
+      zone.innerHTML = screenshotHasImageHTML(data._screenshot);
+    }
+  }
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Screenshot handler
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function screenshotHasImageHTML(src) {
+  return `<img src="${src}" alt="ITR screenshot">
+    <button class="screenshot-delete" onclick="deleteScreenshot(event)" title="Remove screenshot">✕ Remove</button>`;
+}
+
+function deleteScreenshot(e) {
+  e.stopPropagation();
+  const zone = document.getElementById('screenshot-zone');
+  zone.classList.remove('has-image');
+  zone.innerHTML = `
+    <div id="screenshot-placeholder">
+      <div style="font-size:24px;margin-bottom:6px;">🖼</div>
+      <div>Paste screenshot here <span style="color:#bbb;font-weight:400;">(Ctrl+V / Cmd+V)</span></div>
+      <div class="zone-hint">Or drag and drop an image file</div>
+    </div>`;
+  if (activePaperId) {
+    saveData(activePaperId, { _screenshot: null });
+    showSavedIndicator();
+  }
+}
+
+function applyScreenshotFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const zone = document.getElementById('screenshot-zone');
+    if (!zone) return;
+    zone.classList.add('has-image');
+    zone.innerHTML = screenshotHasImageHTML(e.target.result);
+    if (activePaperId) {
+      saveData(activePaperId, { _screenshot: e.target.result });
+      showSavedIndicator();
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function handlePaste(e) {
+  const items = (e.clipboardData || (e.originalEvent && e.originalEvent.clipboardData) || {}).items;
+  if (!items) return;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      applyScreenshotFile(items[i].getAsFile());
+      e.preventDefault();
+      return;
+    }
+  }
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  applyScreenshotFile(e.dataTransfer.files[0]);
+}
+
+
+function esc(val) {
+  return val ? String(val).replace(/"/g, '&quot;').replace(/</g, '&lt;') : '';
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Dynamic Q5 location rows (internal key q4)
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function addQ4Row() {
+  const container = document.getElementById('q4-locations');
+  if (!container) return;
+  const idx = container.querySelectorAll('.q4-row').length;
+  const row = document.createElement('div');
+  row.className = 'q4-row';
+  row.style.cssText = 'margin-bottom:12px;';
+  row.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
+      <div>
+        <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
+        <select class="q-select" data-key="q4_source_${idx}" onchange="triggerSave()" style="width:100%">
+          <option value="">— Select —</option>
+          <option>Journal website</option>
+          <option>External repository</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
+        <input type="text" class="q-input" data-key="q4_link_${idx}" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+      </div>
+      <div style="padding-bottom:1px;">
+        <button onclick="this.closest('.q4-row').remove();triggerSave();" style="padding:8px 12px;background:#fce4d6;border:1px solid #e8a07a;border-radius:5px;color:var(--warn-dark);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Remove this row">−</button>
+      </div>
+    </div>
+    <div>
+      <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
+      <textarea class="notes-area" data-key="q4_notes_${idx}" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+    </div>`;
+  container.appendChild(row);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Dynamic Q6 language rows (internal key q5)
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function addQ5Row() {
+  const container = document.getElementById('q5-langs');
+  if (!container) return;
+  const idx = container.querySelectorAll('.q5-row').length;
+  const row = document.createElement('div');
+  row.className = 'q5-row';
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
+  const langs = ['R','Python','MATLAB','Stata','Julia','SPSS','MPlus','C/C++','Shell','Other','Unclear'];
+  row.innerHTML = `
+    <div>
+      <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Code file / location</label>
+      <input type="text" class="q-input" data-key="q5_file_${idx}" placeholder="e.g. simulation.R or osf.io/xyz" oninput="triggerSave()" style="width:100%">
+    </div>
+    <div>
+      <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Language(s) <button onclick="this.closest('.q5-row').remove();triggerSave();" style="margin-left:8px;padding:1px 7px;background:#fce4d6;border:1px solid #e8a07a;border-radius:4px;color:var(--warn-dark);font-size:8pt;font-weight:700;cursor:pointer;" title="Remove this row">Remove</button></label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1.5px solid var(--border);border-radius:5px;background:#fff;">
+        ${langs.map(lang => `
+          <label style="display:flex;align-items:center;gap:4px;font-size:9pt;cursor:pointer;">
+            <input type="checkbox" data-key="q5_lang_${idx}_${lang.toLowerCase().replace('/','_')}" data-group="q5_lang_${idx}" data-multi="true" onchange="handleCbChange(this)" style="accent-color:var(--accent-mid);">
+            ${lang}
+          </label>`).join('')}
+      </div>
+    </div>`;
+  container.appendChild(row);
+}
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Close warning — fires only when any data has been entered
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+function hasUnsavedData() {
+  return papers.some(p => {
+    const d = loadData(p.id);
+    return Object.values(d).some(v => v !== '' && v !== false && v !== null && v !== undefined);
+  });
+}
+
+window.addEventListener('beforeunload', e => {
+  if (hasUnsavedData()) {
+    e.preventDefault();
+    e.returnValue = ''; // required for the browser dialog to appear
+  }
+});
+
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// Init — pre-fill login from last session
+// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+document.addEventListener('paste', function(e) {
+  const tag = (document.activeElement || {}).tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+  const zone = document.getElementById('screenshot-zone');
+  if (!zone) return;
+  handlePaste(e);
+});
+
+document.addEventListener('keydown', function(e) {
+  var ca = document.getElementById('content-area');
+  if (!ca) return;
+  var tag = document.activeElement ? document.activeElement.tagName : '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'ArrowDown') { ca.scrollBy({top: 120, behavior: 'smooth'}); e.preventDefault(); }
+  if (e.key === 'ArrowUp')   { ca.scrollBy({top: -120, behavior: 'smooth'}); e.preventDefault(); }
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  // Restore sidebar collapsed state
+  if (localStorage.getItem('sidebar_collapsed') === '1' || window.innerWidth <= 720) {
+    toggleSidebar(true);
+  }
+  document.getElementById('ref-iframe').addEventListener('load', isolateRefSection);
+  const savedId = localStorage.getItem('proto_coder_id');
+  if (savedId) {
+    document.getElementById('login-coder-id').value = savedId;
+    try {
+      const savedPapers = localStorage.getItem('proto_papers');
+      if (savedPapers && JSON.parse(savedPapers).length > 0) {
+        document.getElementById('login-batch-section').style.display = 'none';
+        document.getElementById('login-restore-section').style.display = 'block';
+        document.getElementById('login-note').textContent =
+          'Welcome back! Your previous session data is still saved. Click Start to continue.';
+      }
+    } catch(e) {}
+  }
+});
+</script>
+</body>
+</html>
+

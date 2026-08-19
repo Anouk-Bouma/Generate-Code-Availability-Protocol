@@ -1,0 +1,313 @@
+---
+title: "2_LinksandKeywordsReport"
+format: html
+editor: visual
+---
+
+## Packages
+
+```{r}
+#| echo: false
+library(xml2)
+library(stringr)
+library(dplyr)
+library(purrr)
+library(bib2df)
+library(jsonlite)
+```
+
+## Configuration
+
+Just three settings, so you can point the script at different input/output files without touching the logic below.
+
+```{r}
+# BibTeX metadata file exported from Zotero
+bib_file <- "all_articles_metadata.bib"
+
+# Folder containing GROBID TEI-XML files for the pilot articles
+xml_folder <- "Articles All Records"
+
+# Output RDS file to be read by RUN_ME.qmd
+output_file <- "auto_report_input_data.rds"
+```
+
+## Read metadata from BibTeX
+
+Loads `all_articles_metadata.bib` with `bib2df`, then keeps just `title`, `abstract`, `DOI`. Strips stray `{}` from titles. **Drops any entry without a DOI** (`filter(!is.na(DOI) & nzchar(DOI))`). Also builds `doi_no_slash` (DOI with `/` removed), which is the join key used everywhere else in the script.
+
+```{r}
+#| echo: false
+
+bib_raw <- bib2df(bib_file)
+
+meta_data <- bib_raw %>%
+  transmute(
+    title    = str_remove_all(TITLE, "[{}]"),
+    abstract = ABSTRACT,
+    DOI      = DOI
+  ) %>%
+  filter(!is.na(DOI) & nzchar(DOI)) %>%
+  mutate(doi_no_slash = gsub("/", "", DOI))
+
+message("Extracted ", nrow(meta_data), " items with a DOI from BibTeX")
+
+# Reading in inclusion data to create a vector of the included doi's
+included_dois <- readRDS("all_articles.rds") %>%
+  filter(included == TRUE) %>%
+  pull(doi_no_slash)
+
+message("Included ", length(included_dois), " items")
+
+# Filter the meta_data df to contain only those items that are in the list of included doi's
+meta_data <- meta_data %>%
+  filter(doi_no_slash %in% included_dois) %>%
+  # Add ID variable to the data frame
+  mutate(ID = sprintf("P%03d", row_number()))
+
+message("Filtered meta data to include ", nrow(meta_data), " items")
+```
+
+## Export paper batch for index.html upload
+
+Writes a `papers` batch JSON that can be uploaded on the `index.html` login screen (the "Upload batch file" step), so a coder's sidebar is pre-populated with the right paper IDs and titles. Built straight from `meta_data`, so the `ID`s here are guaranteed to match the `P001`-style IDs used everywhere else in the pipeline (`df_fulltext`, `full_data`, and the section anchors in `support_file.html`) — do **not** regenerate IDs from the `.bib` file separately, since row order or filtering could drift out of sync with this script's own numbering.
+
+Set `batch_start`/`batch_end` to the ID range to hand to a given coder (matches the `batch_articles` convention in script 3).
+
+```{r}
+# ID range to export for this batch (inclusive)
+batch_start <- 1
+batch_end   <- 100
+
+batch_ids <- sprintf("P%03d", batch_start:batch_end)
+
+batch_papers <- meta_data %>%
+  filter(ID %in% batch_ids) %>%
+  transmute(id = ID, title = title)
+
+batch_output_file <- sprintf("papers_batch_%s-%s.json", batch_ids[1], batch_ids[length(batch_ids)])
+
+write_json(list(papers = batch_papers), batch_output_file, auto_unbox = TRUE, pretty = TRUE)
+
+message("Wrote batch file with ", nrow(batch_papers), " of ", length(batch_ids),
+        " requested papers to ", batch_output_file)
+```
+
+## Parse TEI XML files
+
+-   **Title / abstract**: pulled from the XML as a fallback in case BibTeX is missing them.
+
+-   **Full text**: grabs all `<p>` and `<head>` elements from the body and back matter (e.g. data-availability statements), skipping tables and formulas. Crucially, wherever GROBID found a hyperlink (`<ref type="url">`), it appends `[the-actual-url]` right after the visible anchor text — so a link that displays as "see our repository" becomes "see our repository \[https://osf.io/...\]" in the plain-text version. That's what lets later keyword-context snippets show clickable links even though they're just strings by that point.
+
+-   **URLs**: separately extracted into a `url_data` table of `{url, context}` pairs, using the parent paragraph as context — this is the primary/cleaner source of links (vs. text-mining full_text for `https://` later).
+
+-   Wrapped in `tryCatch` — if a file fails to parse, it logs a warning and returns an all-NA row instead of crashing the whole loop.
+
+Each file's result becomes one row of `df_fulltext`. The `doi_no_slash` for that row is always derived from the filename (GROBID names files `<original>.pdf.tei.xml`, so it strips that suffix), never from DOI text inside the document — GROBID sometimes mis-extracts a different DOI from the header (e.g. a supplementary-materials DOI) or from bibliography references, which would silently break the join. The filename is the reliable join key: files are named by `doi_no_slash` in the first place, matching `meta_data$doi_no_slash` (from BibTeX) and `all_articles.rds$doi_no_slash`.
+
+```{r}
+#| echo: false
+
+clean_url <- function(url) str_remove_all(url, "[​‌‍­﻿]")
+
+parse_tei_xml <- function(xml_path) {
+  tryCatch({
+    doc <- read_xml(xml_path)
+    ns  <- c(tei = "http://www.tei-c.org/ns/1.0")
+
+    # Title (use as fallback if not in RDF)
+    title_node <- xml_find_first(
+      doc, "//tei:titleStmt/tei:title[@level='a'][@type='main']", ns)
+    if (is.na(title_node))
+      title_node <- xml_find_first(doc, "//tei:titleStmt/tei:title", ns)
+    title <- if (!is.na(title_node)) trimws(xml_text(title_node)) else NA_character_
+
+    # Abstract (fallback)
+    abs_nodes <- xml_find_all(doc, "//tei:profileDesc//tei:abstract//tei:p", ns)
+    abstract  <- paste(xml_text(abs_nodes), collapse = " ")
+    if (nchar(trimws(abstract)) == 0) abstract <- NA_character_
+
+    # Append "[target-url]" after a ref's anchor text so that links surface as
+    # clickable text in any downstream context extracted from full_text
+    # (e.g. keyword match contexts), matching how url_data does it below.
+    node_text_with_links <- function(node) {
+      txt  <- trimws(xml_text(node))
+      refs <- xml_find_all(node, ".//*[@type='url']", ns)
+      for (ref in refs) {
+        target <- clean_url(xml_attr(ref, "target"))
+        anchor <- trimws(xml_text(ref))
+        if (!is.na(target) && nzchar(target) && nzchar(anchor) && anchor != target)
+          txt <- str_replace(txt, fixed(anchor), paste0(anchor, " [", target, "]"))
+      }
+      txt
+    }
+
+    # Full text from body + back matter
+    body_nodes <- xml_find_all(
+      doc, "//tei:body//*[self::tei:p or self::tei:head][not(ancestor::tei:figure[@type='table'])][not(ancestor::tei:formula)]", ns)
+    back_nodes <- xml_find_all(
+      doc, "//tei:back//*[self::tei:p or self::tei:head][not(ancestor::tei:listBibl)][not(ancestor::tei:figure[@type='table'])][not(ancestor::tei:formula)]", ns)
+    full_text  <- gsub("\n", " ",
+      paste(c(vapply(body_nodes, node_text_with_links, character(1)),
+              vapply(back_nodes, node_text_with_links, character(1))), collapse = " "))
+
+    # URLs: extract target attribute and parent paragraph as context
+    url_refs <- xml_find_all(doc, "//*[@type='url']", ns)
+    url_data <- map_dfr(url_refs, function(ref) {
+      target <- clean_url(xml_attr(ref, "target"))
+      if (is.na(target) || !nzchar(target)) return(NULL)
+      target  <- str_remove(target, "[.,;:!?]+$")
+      context <- trimws(xml_text(xml_parent(ref)))
+      anchor  <- trimws(xml_text(ref))
+      if (nzchar(anchor) && anchor != target)
+        context <- str_replace(context, fixed(anchor),
+                               paste0(anchor, " [", target, "]"))
+      tibble(url = target, context = context)
+    })
+
+    all_urls <- if (nrow(url_data) > 0) unique(url_data$url) else character(0)
+
+    list(title = title, abstract = abstract, full_text = full_text,
+         urls = all_urls, url_data = url_data)
+
+  }, error = function(e) {
+    warning("Failed to parse: ", basename(xml_path), " — ", e$message)
+    list(title = NA_character_, abstract = NA_character_, full_text = NA_character_,
+         urls = character(0),
+         url_data = tibble(url = character(0), context = character(0)))
+  })
+}
+
+xml_paths <- list.files(xml_folder,
+                        pattern = "\\.(tei\\.xml|xml)$",
+                        recursive = TRUE,
+                        full.names = TRUE)
+
+message("Found ", length(xml_paths), " XML files in ", xml_folder)
+
+df_fulltext <- map_dfr(xml_paths, function(xml_file) {
+  result <- parse_tei_xml(xml_file)
+
+  # GROBID appends .tei.xml to the full original filename (including .pdf),
+  # so strip .pdf.tei.xml first, then fall back to .tei.xml or .xml. The
+  # filename is always the join key — never DOI text parsed from inside the
+  # document, which GROBID can mis-extract (e.g. picking up a bibliography
+  # reference's DOI or a supplementary-materials DOI instead of the article's).
+  doi_no_slash <- basename(xml_file) %>%
+    str_replace("\\.pdf\\.tei\\.xml$|\\.tei\\.xml$|\\.xml$", "")
+
+  tibble(
+    doi_no_slash = doi_no_slash,
+    title_xml    = result$title,
+    abstract_xml = result$abstract,
+    full_text    = result$full_text,
+    urls         = list(result$urls),
+    url_data     = list(result$url_data)
+  )
+})
+
+message("Parsed ", nrow(df_fulltext), " XML files")
+```
+
+## Join metadata with full text
+
+Left-joins the BibTeX metadata (`meta_data`) with the XML-parsed data (`df_fulltext`) on `doi_no_slash`. Title/abstract: BibTeX wins, XML fills gaps (`coalesce`). Builds a clickable `DOI Link` column. Logs how many of the BibTeX articles actually found a matching XML file — worth checking that number isn't unexpectedly low.
+
+```{r}
+full_data <- meta_data %>%
+  left_join(df_fulltext, by = "doi_no_slash") %>%
+  mutate(
+    # BibTeX metadata takes priority; fall back to XML-extracted values
+    title    = coalesce(title, title_xml),
+    abstract = coalesce(abstract, abstract_xml),
+    `DOI Link` = paste0("https://doi.org/", DOI)
+  ) %>%
+  select(-title_xml, -abstract_xml)
+
+message(sum(!is.na(full_data$full_text)), " of ", nrow(full_data),
+        " articles matched to an XML file")
+```
+
+## Keyword definitions
+
+```{r}
+key_phrases_exact <- c("code", "script", "osf", "git",
+                       "zenodo", "figshare", "supplement", "replicate",
+                       "reproduce", "appendix", "syntax", "upon request",
+                       "restricted access", "upon reasonable request", "data availability",
+                       "supporting materials", "materials", "repository")
+    
+key_phrases_gapped <- list(
+  c("available", "request"),
+  c("code", "request"),
+  c("upon", "request"),
+  c("supplement", "request"),
+  c("availability", "statement")
+)
+max_gap <- 3
+```
+
+## Extract keyword context
+
+Splits each article's full text into sentences, then for every keyword/pair, finds matching sentences and grabs a 3-sentence window (previous + matched + next) as context. Runs this over every article's `full_text` via `map()`, storing the result as a nested tibble in a new `keyword_data` list-column. Also bolts on four empty screening columns every article needs downstream: `included`, `excluded`, `second_reviewer` (all `FALSE`), `note` (`""`) — these are what you'll fill in by hand while reviewing in `RUN_ME.qmd`'s output.
+
+```{r}
+extract_keyword_context <- function(text, key_phrases_exact, key_phrases_gapped, max_gap) {
+  if (is.na(text) || nchar(trimws(text)) == 0)
+    return(tibble(keyword = character(0), context = character(0)))
+
+  sentences <- unlist(strsplit(text, "(?<=[.!?])\\s+", perl = TRUE))
+
+  # Returns one row per unique sentence that matches pattern, labelled with kw_label
+  contexts_for <- function(kw_label, pattern) {
+    idx <- unique(which(str_detect(sentences, pattern)))
+    if (length(idx) == 0) return(tibble(keyword = character(0), context = character(0)))
+    map_dfr(idx, function(i) {
+      tibble(
+        keyword = kw_label,
+        context = paste(na.omit(c(
+          if (i > 1) sentences[i - 1] else NA_character_,
+          sentences[i],
+          if (i < length(sentences)) sentences[i + 1] else NA_character_
+        )), collapse = " ")
+      )
+    })
+  }
+
+  # Prefix match (\bkeyword) catches all case variants and suffixes:
+  # e.g. "supplement" also matches Supplement, supplementary, supplemental
+  exact_results <- map_dfr(key_phrases_exact, function(kw) {
+    contexts_for(kw, regex(paste0("\\b", kw), ignore_case = TRUE))
+  })
+
+  gapped_results <- map_dfr(key_phrases_gapped, function(pair) {
+    pattern <- regex(
+      paste0("\\b", pair[1], "(?:\\s+[\\w,\\.\\!\\?]+){0,", max_gap, "}\\s+\\b", pair[2]),
+      ignore_case = TRUE
+    )
+    contexts_for(paste(pair, collapse = " "), pattern)
+  })
+
+  bind_rows(exact_results, gapped_results)
+}
+
+full_data <- full_data %>%
+  mutate(
+    keyword_data = map(full_text, ~extract_keyword_context(
+      .x, key_phrases_exact, key_phrases_gapped, max_gap)),
+    included        = FALSE,
+    excluded        = FALSE,
+    second_reviewer = FALSE,
+    note            = ""
+  )
+
+message("Keyword extraction complete")
+```
+
+## Save pilot data
+
+Writes the whole thing to `auto_report_input_data.rds`. That file is then read straight in by `RUN_ME.qmd` to generate the report.
+
+```{r}
+saveRDS(full_data, file = output_file)
+message("Saved ", nrow(full_data), " articles to: ", output_file)
+```

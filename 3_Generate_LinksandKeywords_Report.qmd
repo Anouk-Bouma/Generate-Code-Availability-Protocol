@@ -1,0 +1,249 @@
+---
+title: "3: Generate Links and Keywords Report"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    toc-float: true
+    embed-resources: true
+    page-layout: full
+execute:
+  echo: false
+  warning: false
+  message: false
+params:
+  batch_ids: null
+  pdf_link_dir: null
+---
+
+## Dependencies
+
+```{r}
+
+library(dplyr)
+library(stringr)
+library(purrr)
+```
+
+## General Setup (Variables to change)
+
+```{r setup}
+
+# Data file: update this path to match your batch file
+data_file <- "auto_report_input_data.rds"
+
+# Path to pdf files
+pdf_path <- "Articles All Records/files"
+
+# Articles to include in the batch (first article number, last article number).
+# Only used when this script is rendered manually — when driven by
+# generate_coder_batch.R, params$batch_ids overrides this with the exact
+# (possibly non-contiguous) ID list for that coder's batch.
+batch_articles <- c(1, 100)
+
+```
+
+```{r}
+include_batch <- if (!is.null(params$batch_ids)) {
+  params$batch_ids
+} else {
+  # IDs are generated in script 2 as P001, P002, ... — this fills in the
+  # numbers and expands them to the matching zero-padded ID range automatically.
+  sprintf("P%03d", batch_articles[1]:batch_articles[2])
+}
+
+# Keywords in protocol order. Gapped-pair labels from Pilot_pipeline.qmd's
+# key_phrases_gapped (e.g. "available request") are NOT listed here — the report
+# loop below appends whatever keyword labels actually show up in each article's
+# keyword_data, so gapped pairs display automatically without needing to be
+# kept in sync with this list.
+code_keywords <- c("code", "script", "osf", "git", "figshare", "supplement",
+                   "replicate", "reproduce", "zenodo", "appendix", "syntax",
+                   "upon request", "restricted access", "upon reasonable request")
+
+# PDF lookup: scan PilotItems/files/ for PDFs and map doi_no_slash -> relative path
+pdf_files <- list.files(pdf_path, pattern = "\\.pdf$",
+                        recursive = TRUE, full.names = FALSE)
+pdf_lookup <- setNames(
+  file.path(pdf_path, pdf_files),
+  tools::file_path_sans_ext(basename(pdf_files))
+)
+
+if (file.exists(data_file)) {
+  articles <- readRDS(data_file)
+} else {
+  stop(paste("Data file not found:", data_file))
+}
+
+# Restrict to the requested batch of article IDs
+articles <- articles %>% filter(ID %in% include_batch)
+
+if (nrow(articles) == 0) {
+  stop("No articles found for IDs ", include_batch[1], " to ",
+       include_batch[length(include_batch)], " — check batch_articles and the ID range in ", data_file)
+}
+
+message("Generating report for ", nrow(articles), " of ", length(include_batch),
+        " requested articles (", include_batch[1], " to ",
+        include_batch[length(include_batch)], ")")
+
+# Remove invisible Unicode characters that PDF extraction inserts into URLs
+# (zero-width space, zero-width non-joiner/joiner, soft hyphen, BOM)
+clean_url <- function(url) {
+  str_remove_all(url, "[​‌‍­﻿]")
+}
+
+# Extract all unique URLs from a character vector of text snippets
+extract_urls <- function(texts) {
+  texts <- texts[!is.na(texts)]
+  matches <- str_extract_all(texts, "https?://[^\\s<>\"'\\)\\]]+")
+  urls <- unlist(matches)
+  urls <- str_remove(urls, "[.,;:!?]+$")   # strip trailing punctuation
+  urls <- sapply(urls, clean_url, USE.NAMES = FALSE)
+  unique(urls[nzchar(urls)])
+}
+
+# Wrap URLs in text with clickable <a> tags (cleans href, keeps display text clean too)
+linkify <- function(text) {
+  if (is.na(text) || nchar(text) == 0) return(text)
+  str_replace_all(text,
+    "(https?://[^\\s<>\"'\\)\\]]+)",
+    function(url) {
+      clean <- clean_url(url)
+      sprintf('<a href="%s" target="_blank">%s</a>', clean, clean)
+    })
+}
+
+# Bold keywords in already-linkified text, skipping content inside <a> tags
+bold_keywords <- function(text, keywords) {
+  for (kw in keywords) {
+    text <- str_replace_all(text,
+      regex(paste0("(<a\\s[^>]*>.*?</a>)|(\\b", kw, "\\w*)"), ignore_case = TRUE),
+      function(m) ifelse(startsWith(m, "<a "), m, paste0("<strong>", m, "</strong>")))
+  }
+  text
+}
+
+# Find context windows around every occurrence of a URL in the full text.
+# Returns a character vector of unique context strings (one per occurrence).
+# Matches by stripping whitespace (handles GROBID-broken URLs in body text).
+get_url_contexts <- function(full_text, url, n_before = 1, n_after = 1) {
+  if (is.na(full_text) || nchar(full_text) == 0) return(character(0))
+  sentences <- unlist(strsplit(full_text, "(?<=[.!?])\\s+", perl = TRUE))
+
+  url_core <- url %>%
+    str_remove("^https?://") %>%
+    str_remove_all("\\s") %>%
+    substr(1, 30) %>%
+    str_replace_all("([.?+*()\\[\\]{}|^$\\\\])", "\\\\\\1")
+
+  idx <- which(str_detect(str_remove_all(sentences, "\\s"),
+                           regex(url_core, ignore_case = TRUE)))
+  if (length(idx) == 0) return(character(0))
+
+  contexts <- sapply(idx, function(i) {
+    paste(sentences[max(1, i - n_before):min(length(sentences), i + n_after)],
+          collapse = " ")
+  })
+  unique(contexts)
+}
+```
+
+```{r report, results='asis'}
+for (i in seq_len(nrow(articles))) {
+  article    <- articles[i, ]
+  keyword_df <- article$keyword_data[[1]]
+
+  context_texts <- if (!is.null(keyword_df) && nrow(keyword_df) > 0)
+    keyword_df$context else character(0)
+
+  all_urls <- if ("urls" %in% names(article) && length(article$urls[[1]]) > 0) {
+    article$urls[[1]]
+  } else {
+    extract_urls(c(article$abstract, context_texts))
+  }
+
+  # ── Article header ───────────────────────────────────────────────────────
+  cat(sprintf("\n\n## %s. %s\n\n", article$ID, article$title))
+
+  # ── Metadata ─────────────────────────────────────────────────────────────
+  cat(sprintf('**DOI:** %s  \n', article$DOI))
+  cat(sprintf('**Link:** <a href="%s" target="_blank">%s</a>  \n',
+              article$`DOI Link`, article$`DOI Link`))
+  # Existence is always checked against the real corpus (pdf_path); the href
+  # written into the report points there too UNLESS pdf_link_dir is set (by
+  # generate_coder_batch.R), in which case it points at a flat pdfs/<doi>.pdf
+  # path instead, matching where that script copies the batch's PDFs to.
+  pdf_src <- pdf_lookup[article$doi_no_slash]
+  if (!is.na(pdf_src)) {
+    pdf_href <- if (!is.null(params$pdf_link_dir)) {
+      file.path(params$pdf_link_dir, paste0(article$doi_no_slash, ".pdf"))
+    } else {
+      pdf_src
+    }
+    cat(sprintf('**PDF:** <a href="%s" target="_blank">Open PDF</a>\n\n', pdf_href))
+  } else {
+    cat("\n")
+  }
+
+  # ── Abstract (collapsed) ─────────────────────────────────────────────────
+  bold_abstract <- linkify(article$abstract)
+  cat('<details style="margin-bottom:1em;"><summary><strong>Abstract</strong></summary>\n')
+  cat('<div style="padding:0.5em 0;">', bold_abstract, "</div></details>\n\n")
+
+  # ── Links found in paper ─────────────────────────────────────────────────
+  if (length(all_urls) > 0) {
+    cat("<h4>Links Found in Paper</h4>\n")
+    all_urls <- all_urls[order(str_detect(all_urls, regex("doi", ignore_case = TRUE)))]
+    # Pre-extracted contexts from XML (keyed by clean target URL)
+    xml_url_data <- if ("url_data" %in% names(article) && !is.null(article$url_data[[1]]))
+      article$url_data[[1]] else tibble(url = character(0), context = character(0))
+    for (url in all_urls) {
+      url_link <- sprintf('<a href="%s" target="_blank">%s</a>', url, url)
+      # Use XML-extracted context first; fall back to full-text search
+      xml_ctx  <- xml_url_data$context[xml_url_data$url == url]
+      contexts <- if (length(xml_ctx) > 0 && any(nzchar(xml_ctx))) {
+        unique(xml_ctx[nzchar(xml_ctx)])
+      } else {
+        get_url_contexts(article$full_text, url)
+      }
+      cat(sprintf('<p style="margin-top:1em; margin-bottom:0.2em;"><strong style="color:black;">Link:</strong> <span style="font-size:1.15em;">%s</span></p>\n', url_link))
+      if (length(contexts) > 0) {
+        cat('<p style="margin-bottom:0.2em;color:black;">Contexts:</p>\n')
+        for (ctx in contexts) {
+          ctx_hl <- linkify(ctx)
+          cat(sprintf('<blockquote style="margin-top:0.2em;">%s</blockquote>\n\n', ctx_hl))
+        }
+      }
+    }
+    cat("\n")
+  }
+
+  # ── Keyword matches (each keyword collapsed) ─────────────────────────────
+  if (!is.null(keyword_df) && nrow(keyword_df) > 0) {
+    cat("<h4>Keyword Matches</h4>\n")
+    # Protocol keywords first (in order), then any other labels found in the
+    # data (e.g. gapped-pair matches like "available request") appended after.
+    display_keywords <- unique(c(code_keywords, keyword_df$keyword))
+    for (kw in display_keywords) {
+      contexts <- keyword_df$context[keyword_df$keyword == kw]
+      if (length(contexts) == 0) next
+      cat(sprintf(
+        '<details style="margin-bottom:0.5em;">\n<summary><strong style="font-size:1.15em;">%s</strong></summary>\n',
+        kw))
+      for (ctx in contexts) {
+        # Bold the individual words of a gapped-pair label too (e.g. "available"
+        # and "request"), since they rarely appear as one contiguous phrase.
+        bold_words <- unique(c(code_keywords, strsplit(kw, "\\s+")[[1]]))
+        ctx_hl <- bold_keywords(linkify(ctx), bold_words)
+        cat(sprintf('<blockquote>%s</blockquote>\n', ctx_hl))
+      }
+      cat('</details>\n\n')
+    }
+  } else {
+    cat("*No keyword matches found.*\n\n")
+  }
+
+  cat("\n---\n")
+}
+```
