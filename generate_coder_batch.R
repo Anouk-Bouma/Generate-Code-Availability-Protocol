@@ -19,6 +19,8 @@ library(dplyr)
 library(jsonlite)
 library(quarto)
 
+source("R/batch_json.R")
+
 # ── Config: edit these for each batch ───────────────────────────────────────
 
 coder_id  <- "coder01"
@@ -89,10 +91,11 @@ file.copy(tmp_report, file.path(out_dir, "support_file.html"), overwrite = TRUE)
 file.remove(tmp_report)
 
 # ── Write the papers batch JSON (upload target for index.html) ──────────────
+# Matches pilot_batch.json's structure: papers[] (short "Author (Year)"
+# labels for the sidebar) plus records[] (pre-fills each paper's metadata
+# fields in the protocol form — authors, year, journal, title, DOI).
 
-batch_papers <- batch %>% transmute(id = ID, title = title)
-write_json(list(papers = batch_papers), file.path(out_dir, "papers_batch.json"),
-           auto_unbox = TRUE, pretty = TRUE)
+write_batch_json(batch, file.path(out_dir, "papers_batch.json"), coder_id = coder_id)
 
 # ── Copy index.html ──────────────────────────────────────────────────────────
 

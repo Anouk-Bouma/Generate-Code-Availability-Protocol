@@ -13,7 +13,6 @@ library(stringr)
 library(dplyr)
 library(purrr)
 library(bib2df)
-library(jsonlite)
 ```
 
 ## Configuration
@@ -33,7 +32,7 @@ output_file <- "auto_report_input_data.rds"
 
 ## Read metadata from BibTeX
 
-Loads `all_articles_metadata.bib` with `bib2df`, then keeps just `title`, `abstract`, `DOI`. Strips stray `{}` from titles. **Drops any entry without a DOI** (`filter(!is.na(DOI) & nzchar(DOI))`). Also builds `doi_no_slash` (DOI with `/` removed), which is the join key used everywhere else in the script.
+Loads `all_articles_metadata.bib` with `bib2df`, then keeps `title`, `abstract`, `authors`, `year`, `journal`, `DOI`. Strips stray `{}` from titles. **Drops any entry without a DOI** (`filter(!is.na(DOI) & nzchar(DOI))`). Also builds `doi_no_slash` (DOI with `/` removed), which is the join key used everywhere else in the script. `authors`/`year`/`journal` aren't used by the report itself — they're carried through to `full_data`/`auto_report_input_data.rds` purely so `generate_coder_batch.R` can pre-fill the protocol's metadata fields (via `R/batch_json.R`) when it later packages a batch for a coder, without needing to re-read the `.bib` file itself.
 
 ```{r}
 #| echo: false
@@ -44,6 +43,9 @@ meta_data <- bib_raw %>%
   transmute(
     title    = str_remove_all(TITLE, "[{}]"),
     abstract = ABSTRACT,
+    authors  = AUTHOR,  # list-column: character vector of "Last, First" per paper
+    year     = YEAR,
+    journal  = JOURNAL,
     DOI      = DOI
   ) %>%
   filter(!is.na(DOI) & nzchar(DOI)) %>%
@@ -65,31 +67,6 @@ meta_data <- meta_data %>%
   mutate(ID = sprintf("P%03d", row_number()))
 
 message("Filtered meta data to include ", nrow(meta_data), " items")
-```
-
-## Export paper batch for index.html upload
-
-Writes a `papers` batch JSON that can be uploaded on the `index.html` login screen (the "Upload batch file" step), so a coder's sidebar is pre-populated with the right paper IDs and titles. Built straight from `meta_data`, so the `ID`s here are guaranteed to match the `P001`-style IDs used everywhere else in the pipeline (`df_fulltext`, `full_data`, and the section anchors in `support_file.html`) — do **not** regenerate IDs from the `.bib` file separately, since row order or filtering could drift out of sync with this script's own numbering.
-
-Set `batch_start`/`batch_end` to the ID range to hand to a given coder (matches the `batch_articles` convention in script 3).
-
-```{r}
-# ID range to export for this batch (inclusive)
-batch_start <- 1
-batch_end   <- 100
-
-batch_ids <- sprintf("P%03d", batch_start:batch_end)
-
-batch_papers <- meta_data %>%
-  filter(ID %in% batch_ids) %>%
-  transmute(id = ID, title = title)
-
-batch_output_file <- sprintf("papers_batch_%s-%s.json", batch_ids[1], batch_ids[length(batch_ids)])
-
-write_json(list(papers = batch_papers), batch_output_file, auto_unbox = TRUE, pretty = TRUE)
-
-message("Wrote batch file with ", nrow(batch_papers), " of ", length(batch_ids),
-        " requested papers to ", batch_output_file)
 ```
 
 ## Parse TEI XML files
