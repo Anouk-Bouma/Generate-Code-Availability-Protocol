@@ -16,18 +16,16 @@ params:
   pdf_link_dir: null
 ---
 
-## Dependencies
-
-```{r}
-
+```{r setup}
+# Dependencies
 library(dplyr)
 library(stringr)
 library(purrr)
 ```
 
-## General Setup (Variables to change)
-
 ```{r setup}
+
+# Variables to change
 
 # Data file: update this path to match your batch file
 data_file <- "auto_report_input_data.rds"
