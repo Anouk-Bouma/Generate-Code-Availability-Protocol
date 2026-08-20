@@ -1,19 +1,23 @@
-# generate_coder_batch.R
+# 3_Generate_coder_batch.R
 #
 # Assembles everything a coder needs for one batch of papers into a single
 # self-contained folder (and a matching .zip): only the PDFs for that batch,
 # the filtered links-and-keywords report, index.html, and the papers_batch.json
 # to upload there.
 #
+# This is step 3 of the pipeline you actually run, in order:
+#   1_pdf_to_XML.qmd, 2_link_and_keyword_extraction.qmd, then this script.
+# R/report_template.qmd is NOT a step you run yourself — it's an internal
+# template this script renders on your behalf (see the "Render" section
+# below), which is why it isn't numbered alongside 1/2/3.
+#
 # Does NOT re-run script 1 (GROBID XML generation) or the bib-parsing / XML-
 # parsing / keyword-extraction part of script 2 — those are assumed already
 # done. This script only reads the already-merged auto_report_input_data.rds
-# and packages a filtered subset of it. It does render script 3
-# (3_Generate_LinksandKeywords_Report.qmd) fresh each time, since the report
-# needs to be filtered to this batch's papers.
+# and packages a filtered subset of it.
 #
 # Run with the working directory set to the project root (same assumption as
-# scripts 1-3).
+# scripts 1-2).
 
 library(dplyr)
 library(jsonlite)
@@ -21,7 +25,9 @@ library(quarto)
 
 source("R/batch_json.R")
 
-# ── Config: edit these for each batch ───────────────────────────────────────
+project_root <- getwd()
+
+# ── Edit these per batch ─────────────────────────────────────────────────────
 
 coder_id  <- "coder01"
 
@@ -30,9 +36,15 @@ coder_id  <- "coder01"
 batch_ids <- sprintf("P%03d", 1:100)
 # batch_ids <- c("P003", "P017", "P204")
 
-data_file   <- "auto_report_input_data.rds"      # script 2's merged output
-pdf_path    <- "Articles All Records/files"      # real (nested) PDF corpus
-report_qmd  <- "3_Generate_LinksandKeywords_Report.qmd"
+pdf_path <- "Articles All Records/files"  # real (nested) PDF corpus — the one
+                                           # thing here that's actually
+                                           # machine/setup-dependent
+
+# ── Internal wiring — shouldn't normally need to change ─────────────────────
+# All fixed names coming from, or feeding into, the rest of the pipeline.
+
+data_file   <- "auto_report_input_data.rds"          # script 2's merged output
+report_qmd  <- "R/report_template.qmd"
 index_file  <- "index.html"
 batches_dir <- "Batches"
 
@@ -77,18 +89,28 @@ if (length(missing_pdfs) > 0)
 message("Copied ", nrow(batch) - length(missing_pdfs), " of ", nrow(batch), " PDFs")
 
 # ── Render the filtered report ───────────────────────────────────────────────
-# batch_ids and pdf_link_dir are passed as Quarto params (see script 3's YAML)
-# so the report is filtered to this batch and its PDF links point at the flat
-# pdfs/ folder above, instead of script 3's default full-corpus behavior.
+# batch_ids and pdf_link_dir are passed as Quarto params (see the template's
+# YAML) so the report is filtered to this batch and its PDF links point at
+# the flat pdfs/ folder above, instead of the template's default full-corpus
+# behavior. execute_dir is set explicitly to the project root because
+# report_qmd now lives in R/ — without it, the template's own relative paths
+# (data_file, pdf_path) would resolve relative to R/ instead and fail.
+#
+# Note: execute_dir only affects where *code* runs, not where the *output
+# file* lands — quarto always writes output_file next to the input .qmd
+# (i.e. into R/), regardless of execute_dir. So the rendered file has to be
+# looked up there before it can be copied into the batch folder.
 
 tmp_report <- "_batch_render_tmp.html"
 quarto_render(
   input = report_qmd,
   output_file = tmp_report,
+  execute_dir = project_root,
   execute_params = list(batch_ids = batch$ID, pdf_link_dir = "pdfs")
 )
-file.copy(tmp_report, file.path(out_dir, "support_file.html"), overwrite = TRUE)
-file.remove(tmp_report)
+rendered_path <- file.path(dirname(report_qmd), tmp_report)
+file.copy(rendered_path, file.path(out_dir, "support_file.html"), overwrite = TRUE)
+file.remove(rendered_path)
 
 # ── Write the papers batch JSON (upload target for index.html) ──────────────
 # Matches pilot_batch.json's structure: papers[] (short "Author (Year)"

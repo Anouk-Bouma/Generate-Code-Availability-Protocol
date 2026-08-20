@@ -30,10 +30,12 @@ data_file <- "auto_report_input_data.rds"
 # Path to pdf files
 pdf_path <- "Articles All Records/files"
 
-# Articles to include in the batch (first article number, last article number).
-# Only used when this script is rendered manually — when driven by
-# generate_coder_batch.R, params$batch_ids overrides this with the exact
-# (possibly non-contiguous) ID list for that coder's batch.
+# Escape hatch only — you should never actually need to touch this. This
+# template is always invoked by 3_Generate_coder_batch.R, which passes
+# params$batch_ids (the exact, possibly non-contiguous ID list for a coder's
+# batch) and overrides batch_articles below entirely. It exists purely so
+# this file can still be opened and rendered by hand for a quick debug
+# preview, without going through the batch script.
 batch_articles <- c(1, 100)
 ```
 
