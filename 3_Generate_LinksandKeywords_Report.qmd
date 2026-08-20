@@ -1,5 +1,5 @@
 ---
-title: "3: Generate Links and Keywords Report"
+title: "Links and Keywords Report"
 format:
   html:
     toc: true
@@ -21,9 +21,6 @@ params:
 library(dplyr)
 library(stringr)
 library(purrr)
-```
-
-```{r setup}
 
 # Variables to change
 
@@ -38,7 +35,6 @@ pdf_path <- "Articles All Records/files"
 # generate_coder_batch.R, params$batch_ids overrides this with the exact
 # (possibly non-contiguous) ID list for that coder's batch.
 batch_articles <- c(1, 100)
-
 ```
 
 ```{r}

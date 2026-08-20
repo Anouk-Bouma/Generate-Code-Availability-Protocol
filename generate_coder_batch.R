@@ -95,7 +95,7 @@ file.remove(tmp_report)
 # labels for the sidebar) plus records[] (pre-fills each paper's metadata
 # fields in the protocol form — authors, year, journal, title, DOI).
 
-write_batch_json(batch, file.path(out_dir, "papers_batch.json"), coder_id = coder_id)
+write_batch_json(batch, file.path(out_dir, paste0("papers_batch_", coder_id, ".json")), coder_id = coder_id)
 
 # ── Copy index.html ──────────────────────────────────────────────────────────
 
