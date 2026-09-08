@@ -1,9 +1,3 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # Generate Code Availability Protocol
 
 This repository contains the scripts that turn a set of papers (PDFs +
