@@ -1,14 +1,8 @@
 # Generate Code Availability Protocol
 
-This repository contains the scripts that turn a set of papers (PDFs +
-metadata) into a **coder batch**: a single self-contained folder a
-reviewer opens to code each paper against the Code Availability
-Protocol.
+This repository contains the scripts that turn a set of papers (PDFs + metadata) into a **coder batch**: a single self-contained folder a reviewer opens to code each paper against the Code Availability Protocol.
 
-You supply three inputs: your PDFs, a BibTeX export, and your screening
-decisions. Then, you run three scripts in order. The output is one
-`Batches/<coder_id>_<firstID>-<lastID>/` folder (plus a `.zip`) per
-coder.
+You supply three inputs: your PDFs, a BibTeX export, and your screening decisions. Then, you run three scripts in order. The output is one `Batches/<coder_id>_<firstID>-<lastID>/` folder (plus a `.zip`) per coder.
 
 ------------------------------------------------------------------------
 
@@ -50,7 +44,7 @@ Generate-Code-Availability-Protocol/
 ## Prerequisites (one-time setup)
 
 | Requirement | Notes |
-|------------------------------------|------------------------------------|
+|----|----|
 | **R 4.5.x** | The version pinned in `renv.lock`. |
 | **RStudio** (recommended) | Open `Generate-Code-Availability-Protocol.Rproj` so the working directory is the project root. All three scripts assume this. |
 | **Quarto CLI** | Needed to render the `.qmd` files and by script 3. Install from <https://quarto.org> (bundled with recent RStudio). |
@@ -59,37 +53,21 @@ Generate-Code-Availability-Protocol/
 
 ### R packages {#r-packages}
 
-The project uses [`renv`](https://rstudio.github.io/renv/). Opening the
-`.Rproj` runs `.Rprofile`, which activates `renv` and points R at the
-project-local library. To install the exact package versions recorded in
-`renv.lock`, run once:
+The project uses [`renv`](https://rstudio.github.io/renv/). Opening the `.Rproj` runs `.Rprofile`, which activates `renv` and points R at the project-local library. To install the exact package versions recorded in `renv.lock`, run once:
 
 ``` r
 renv::restore()
 ```
 
-That's the only setup step. `renv::restore()` **installs** packages into
-the project library; it does **not** attach them — each script still
-calls `library(...)` in its first chunk (already written), so you don't
-load anything by hand. Just run the scripts in order. `1_pdf_to_XML.qmd`
-also calls `renv::restore()` itself at the top as a safety net.
+That's the only setup step. `renv::restore()` **installs** packages into the project library; it does **not** attach them — each script still calls `library(...)` in its first chunk (already written), so you don't load anything by hand. Just run the scripts in order. `1_pdf_to_XML.qmd` also calls `renv::restore()` itself at the top as a safety net.
 
-> **Note on `metacheck` / GROBID conversion:** Step 1 uses `metacheck`
-> solely for its `convert()` function, which sends the PDFs to a GROBID
-> server and returns TEI-XML. It is a GitHub-only package
-> (`scienceverse/metacheck`), but you do **not** install it by hand —
-> `renv` records the exact commit in `renv.lock` and `renv::restore()`
-> installs it along with everything else. (Any `install.packages` /
-> `pak::pak` line for `metacheck` inside `1_pdf_to_XML.qmd` is redundant
-> and can be removed.)
+> **Note on `metacheck` / GROBID conversion:** Step 1 uses `metacheck` solely for its `convert()` function, which sends the PDFs to a GROBID server and returns TEI-XML. It is a GitHub-only package (`scienceverse/metacheck`), but you do **not** install it by hand — `renv` records the exact commit in `renv.lock` and `renv::restore()` installs it along with everything else. (Any `install.packages` / `pak::pak` line for `metacheck` inside `1_pdf_to_XML.qmd` is redundant and can be removed.)
 
 <details>
 
-<summary><strong>Maintainer only — adding or updating a
-dependency</strong></summary>
+<summary><strong>Maintainer only — adding or updating a dependency</strong></summary>
 
-Users never need this. Do it only when you change what the scripts
-import, then commit the updated `renv.lock`.
+Users never need this. Do it only when you change what the scripts import, then commit the updated `renv.lock`.
 
 ``` r
 # add / update a CRAN package
@@ -102,11 +80,7 @@ renv::install("scienceverse/metacheck")
 renv::snapshot()
 ```
 
-`renv::status()` shows drift between the lockfile, the library, and what
-the scripts actually use. Snapshot type is `"implicit"`, so `snapshot()`
-records only packages referenced by a `library()` / `::` call somewhere
-in the project — after `install()`, always re-run `snapshot()` or the
-new package won't be locked.
+`renv::status()` shows drift between the lockfile, the library, and what the scripts actually use. Snapshot type is `"implicit"`, so `snapshot()` records only packages referenced by a `library()` / `::` call somewhere in the project — after `install()`, always re-run `snapshot()` or the new package won't be locked.
 
 </details>
 
@@ -114,30 +88,18 @@ new package won't be locked.
 
 ## The three inputs you must provide
 
-1.  **PDFs** — put them under `Articles All Records/files/`. Any nesting
-    is fine (the scripts scan recursively); the existing corpus uses one
-    numbered subfolder per paper. **Each PDF must be named
-    `<doi_no_slash>.pdf`** — the DOI with every `/` removed (e.g.
-    `10.1111/jedm.12384` → `10.1111jedm.12384.pdf`). This filename is
-    the join key used everywhere downstream.
+1.  **PDFs** — put them under `Articles All Records/files/`. Any nesting is fine (the scripts scan recursively); the existing corpus uses one numbered subfolder per paper. **Each PDF must be named `<doi_no_slash>.pdf`** — the DOI with every `/` removed (e.g. `10.1111/jedm.12384` → `10.1111jedm.12384.pdf`). This filename is the join key used everywhere downstream.
 
-2.  **`all_articles_metadata.bib`** — a BibTeX export (e.g. from Zotero)
-    covering those papers. Entries **without a DOI are dropped**. Used
-    fields: `title`, `abstract`, `author`, `year`, `journal`, `doi`.
+2.  **`all_articles_metadata.bib`** — a BibTeX export (e.g. from Zotero) covering those papers. Entries **without a DOI are dropped**. Used fields: `title`, `abstract`, `author`, `year`, `journal`, `doi`.
 
-3.  **`all_articles.rds`** — an R data frame of your screening
-    decisions, with at least:
+3.  **`all_articles.rds`** — an R data frame of your screening decisions, with at least:
 
-    -   `doi_no_slash` — DOI with `/` removed (same convention as the
-        PDF filenames)
-    -   `included` — logical; `TRUE` for papers that passed screening
-        and should be coded
+    -   `doi_no_slash` — DOI with `/` removed (same convention as the PDF filenames)
+    -   `included` — logical; `TRUE` for papers that passed screening and should be coded
 
     Only `included == TRUE` rows flow through to a batch.
 
-A paper makes it into the pipeline only if it appears in **all three**:
-a DOI in the `.bib`, an `included == TRUE` row in the `.rds`, and a
-matching `<doi_no_slash>.pdf` (→ `.xml`).
+A paper makes it into the pipeline only if it appears in **all three**: a DOI in the `.bib`, an `included == TRUE` row in the `.rds`, and a matching `<doi_no_slash>.pdf` (→ `.xml`).
 
 ------------------------------------------------------------------------
 
@@ -145,11 +107,9 @@ matching `<doi_no_slash>.pdf` (→ `.xml`).
 
 Open the file and run the chunks (or **Render**).
 
--   Attaches `metacheck` (already installed by `renv::restore()` — see
-    [R packages](#r-packages)) and calls its `convert()` function.
+-   Attaches `metacheck` (already installed by `renv::restore()` — see [R packages](#r-packages)) and calls its `convert()` function.
 -   Scans `Articles All Records/files/` recursively for `*.pdf`.
--   Sends them to a GROBID server and writes one `<name>.pdf.tei.xml`
-    (plus a `.json` sidecar) into `Articles All Records/`.
+-   Sends them to a GROBID server and writes one `<name>.pdf.tei.xml` (plus a `.json` sidecar) into `Articles All Records/`.
 
 ``` r
 paper_testbatch <- convert(
@@ -161,16 +121,11 @@ paper_testbatch <- convert(
 )
 ```
 
-**If the GROBID server is down**, pick another active one from
-<https://www.scienceverse.org/metacheck/convert.json> and update
-`api_url`.
+**If the GROBID server is down**, pick another active one from <https://www.scienceverse.org/metacheck/convert.json> and update `api_url`.
 
-**Incremental runs:** re-running processes every PDF it finds again. To
-convert only new papers, point `pdf_files` at just those PDFs, or move
-already-converted ones aside first.
+**Incremental runs:** re-running processes every PDF it finds again. To convert only new papers, point `pdf_files` at just those PDFs, or move already-converted ones aside first.
 
-**Check:** you should end up with roughly one `.xml` per PDF in
-`Articles All Records/`.
+**Check:** you should end up with roughly one `.xml` per PDF in `Articles All Records/`.
 
 ------------------------------------------------------------------------
 
@@ -187,41 +142,26 @@ output_file <- "auto_report_input_data.rds"
 What it does:
 
 1.  Reads the `.bib`, drops entries with no DOI, builds `doi_no_slash`.
-2.  Reads `all_articles.rds`, keeps `included == TRUE` DOIs, filters the
-    metadata to those.
+2.  Reads `all_articles.rds`, keeps `included == TRUE` DOIs, filters the metadata to those.
 3.  **Assigns IDs** `P001`, `P002`, … in row order of that filtered set.
-4.  Parses every TEI-XML: title/abstract fallback, full body +
-    back-matter text (with `[target-url]` appended after each
-    hyperlink), and a clean `{url, context}` table.
-5.  Joins metadata ⨝ XML on `doi_no_slash` (BibTeX wins for
-    title/abstract; XML fills gaps).
-6.  Extracts keyword contexts (3-sentence windows) for a fixed list of
-    code/data-availability terms and gapped pairs like
-    `available … request`.
-7.  Adds empty review columns (`included`, `excluded`,
-    `second_reviewer`, `note`).
+4.  Parses every TEI-XML: title/abstract fallback, full body + back-matter text (with `[target-url]` appended after each hyperlink), and a clean `{url, context}` table.
+5.  Joins metadata ⨝ XML on `doi_no_slash` (BibTeX wins for title/abstract; XML fills gaps).
+6.  Extracts keyword contexts (3-sentence windows) for a fixed list of code/data-availability terms and gapped pairs like `available … request`.
+7.  Adds empty review columns (`included`, `excluded`, `second_reviewer`, `note`).
 8.  Saves everything to `auto_report_input_data.rds`.
 
 **Checks to read in the console output:**
 
 -   `Included N items` — matches the number of `TRUE` rows you expect.
--   `M of N articles matched to an XML file` — if `M` is unexpectedly
-    low, PDF filenames don't match DOIs, or step 1 didn't produce those
-    XMLs.
+-   `M of N articles matched to an XML file` — if `M` is unexpectedly low, PDF filenames don't match DOIs, or step 1 didn't produce those XMLs.
 
-> **About IDs:** `P###` is assigned by position in the included+DOI set.
-> If you later add or remove papers from the `.bib` or change inclusion
-> decisions and re-run step 2, the IDs can shift. Freeze your three
-> inputs before you start cutting batches, and keep
-> `auto_report_input_data.rds` stable for the whole coding round.
+> **About IDs:** `P###` is assigned by position in the included+DOI set. If you later add or remove papers from the `.bib` or change inclusion decisions and re-run step 2, the IDs can shift. Freeze your three inputs before you start cutting batches, and keep `auto_report_input_data.rds` stable for the whole coding round.
 
 ------------------------------------------------------------------------
 
 ## Step 3 — Package a coder batch (`3_Generate_coder_batch.R`)
 
-This is a plain `.R` script, not a notebook. Run it with the working
-directory at the project root (`source("3_Generate_coder_batch.R")` from
-the RStudio project, or `Rscript 3_Generate_coder_batch.R`).
+This is a plain `.R` script, not a notebook. Run it with the working directory at the project root (`source("3_Generate_coder_batch.R")` from the RStudio project, or `Rscript 3_Generate_coder_batch.R`).
 
 ### Edit these three lines per batch
 
@@ -234,35 +174,28 @@ batch_ids <- sprintf("P%03d", 1:100)       # a contiguous range …
 pdf_path  <- "Articles All Records/files"  # your real (nested) PDF corpus
 ```
 
-Everything below that line (`data_file`, `report_qmd`, `index_file`,
-`batches_dir`) is fixed wiring — leave it alone.
+Everything below that line (`data_file`, `report_qmd`, `index_file`, `batches_dir`) is fixed wiring — leave it alone.
 
 ### What it produces
 
 `Batches/<coder_id>_<firstID>-<lastID>/` containing:
 
 | File | Purpose |
-|------------------------------------|------------------------------------|
+|----|----|
 | `index.html` | the coder-facing protocol app (copied verbatim from the repo root) |
 | `papers_batch_<coder_id>.json` | `papers[]` (sidebar labels) + `records[]` (pre-fills each paper's metadata fields). Uploaded at the app's login screen. |
 | `support_file.html` | `R/report_template.qmd` rendered and filtered to just this batch — links and keyword contexts, with working links to the PDFs in `pdfs/` |
 | `pdfs/<doi_no_slash>.pdf` | only the batch's PDFs, flattened out of the nested corpus |
 
-…plus `Batches/<coder_id>_<firstID>-<lastID>.zip` of that folder
-(`Batches/` is gitignored).
+…plus `Batches/<coder_id>_<firstID>-<lastID>.zip` of that folder (`Batches/` is gitignored).
 
 ### Warnings to check in the console
 
--   `Requested IDs not found in auto_report_input_data.rds: …` — an ID
-    in `batch_ids` isn't in the data (typo, or step 2 not re-run).
--   `No PDF found for these doi_no_slash values: …` — the paper is in
-    the data but its PDF isn't under `pdf_path`. That paper ends up in
-    the JSON/report but with no PDF in `pdfs/`.
--   `No zip executable found …` — the folder is complete; zip it
-    manually if you need the archive.
+-   `Requested IDs not found in auto_report_input_data.rds: …` — an ID in `batch_ids` isn't in the data (typo, or step 2 not re-run).
+-   `No PDF found for these doi_no_slash values: …` — the paper is in the data but its PDF isn't under `pdf_path`. That paper ends up in the JSON/report but with no PDF in `pdfs/`.
+-   `No zip executable found …` — the folder is complete; zip it manually if you need the archive.
 
-Re-running with the same `coder_id` and range overwrites that batch
-folder in place.
+Re-running with the same `coder_id` and range overwrites that batch folder in place.
 
 ------------------------------------------------------------------------
 
@@ -271,12 +204,9 @@ folder in place.
 Send the `.zip` (or the folder). The coder:
 
 1.  Unzips it and opens `index.html` in a browser.
-2.  On the login screen, uploads `papers_batch_<coder_id>.json` ("Upload
-    batch file (.json)").
-3.  Codes each paper, using `support_file.html` and the PDFs in `pdfs/`
-    as reference.
-4.  Uses **Download backup** periodically and sends you the final backup
-    JSON.
+2.  On the login screen, uploads `papers_batch_<coder_id>.json` ("Upload batch file (.json)").
+3.  Codes each paper, using `support_file.html` and the PDFs in `pdfs/` as reference.
+4.  Uses **Download backup** periodically and sends you the final backup JSON.
 
 ------------------------------------------------------------------------
 
@@ -304,7 +234,7 @@ source("3_Generate_coder_batch.R")
 ## Troubleshooting
 
 | Symptom | Likely cause / fix |
-|------------------------------------|------------------------------------|
+|----|----|
 | `there is no package called '…'` when running a script | `renv::restore()` wasn't run (or a new dependency was added without re-snapshotting). Run `renv::restore()`; if that doesn't resolve it, see the maintainer note above. |
 | renv prints "The project is out-of-sync" on startup | The library doesn't match `renv.lock`. `renv::restore()` to match the lockfile, or (maintainer) `renv::snapshot()` to record the current library. |
 | Step 1 errors or hangs | GROBID server unreachable — switch `api_url` to another server from the `convert.json` list. |
