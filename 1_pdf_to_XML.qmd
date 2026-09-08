@@ -13,15 +13,6 @@ renv::restore()
 library(metacheck)
 ```
 
-## Install and load Metacheck
-
-```{r}
-
-#install.packages("devtools")
-#pak::pak("scienceverse/metacheck")
-
-```
-
 ## Process batch to XML files
 
 ```{r}
