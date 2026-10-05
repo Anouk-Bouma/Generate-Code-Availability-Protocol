@@ -282,7 +282,7 @@ message("Keyword extraction complete")
 
 ## Save pilot data
 
-Writes the whole thing to `auto_report_input_data.rds`. That file is then read straight in by `RUN_ME.qmd` to generate the report.
+Writes the whole thing to `auto_report_input_data.rds`. That file is then read straight in by `3_Generate_coder_batch.R` to generate the report.
 
 ```{r}
 saveRDS(full_data, file = output_file)
