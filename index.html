@@ -464,18 +464,6 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
   cursor: pointer;
 }
 .cb-option .opt-text { flex: 1; font-size: 9pt; color: var(--ink); line-height: 1.4; }
-.cb-option .route-tag {
-  font-size: 8pt; font-weight: 700;
-  padding: 3px 8px; border-radius: 3px;
-  white-space: nowrap; align-self: center;
-  opacity: 0; transition: opacity 0.2s;
-  flex-shrink: 0;
-}
-.cb-option.selected .route-tag { opacity: 1; }
-.route-tag.go    { background: var(--accent-mid); color: #fff; }
-.route-tag.skip  { background: var(--warn-bg); color: var(--warn-dark); border: 1px solid #e8a07a; }
-.route-tag.done  { background: var(--green-bg); color: var(--green-dark); }
-.route-tag.note  { background: var(--yellow-bg); color: var(--yellow-dark); border: 1px solid #d4a800; }
 
 /* text input question */
 .q-input {
@@ -835,7 +823,8 @@ document.getElementById('login-coder-id').addEventListener('keydown', e => {
 async function downloadBackup() {
   flushSave();
   const dateStr = new Date().toISOString().slice(0, 10);
-  const coderStr = activeCoderId || 'coder';
+  // Used in file names, so strip characters that aren't allowed there
+  const coderStr = (activeCoderId || 'coder').replace(/[\\/:*?"<>|\s]+/g, '_');
 
   // ── 1. JSON backup (no screenshots) ──────────────────────────────
   const records = papers.map(p => {
@@ -859,7 +848,7 @@ async function downloadBackup() {
   papersWithScreenshots.forEach(p => {
     const src = loadData(p.id)._screenshot;
     const ext = (src.match(/data:image\/(\w+);base64,/) || [])[1] || 'png';
-    zip.file(`${p.id}_ITR_screenshot.${ext}`, src.split(',')[1], { base64: true });
+    zip.file(`${p.id}_${coderStr}_ITR_screenshot.${ext}`, src.split(',')[1], { base64: true });
   });
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -1070,6 +1059,7 @@ function toggleRefPanel() {
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 function triggerSave() {
   if (!activePaperId) return;
+  updateCompletion();
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
@@ -1230,13 +1220,12 @@ function qBlock(id, label, bodyHtml) {
 }
 
 function cbOptions(qKey, options) {
-  // options: [{ text, route, routeClass, value }]
+  // options: [{ text, value }]
   return `<div class="cb-options">${options.map(o => `
     <label class="cb-option" id="opt_${qKey}_${o.value}">
       <input type="checkbox" data-key="${qKey}_${o.value}" data-group="${qKey}" data-value="${o.value}"
              onchange="handleCbChange(this)">
       <span class="opt-text">${o.text}</span>
-      ${o.route ? `<span class="route-tag ${o.routeClass || 'go'}">${o.route}</span>` : ''}
     </label>`).join('')}</div>`;
 }
 
@@ -1289,9 +1278,28 @@ function handleCbChange(el) {
   }
   el.closest('.cb-option').classList.toggle('selected', el.checked);
 
-  // Routing visibility
+  // Routing visibility; clear answers that no longer apply right away, so
+  // two routes are never shown at once
   updateRouting();
+  clearHiddenAnswers(document.getElementById('form-body'));
   triggerSave();
+}
+
+// The green "Phase 1 complete" marker sits at the end of every route through
+// the protocol (2B, Q4 = insufficient, ITR recorded, no ITR found). It is
+// shown only once every required question on the current route is answered,
+// and the paper's tick in the sidebar (_complete) always matches it.
+function updateCompletion() {
+  if (!activePaperId) return;
+  const done = isFormComplete();
+  toggleSection('end_2b', done);
+  toggleSection('end_ci', done && isChecked('q4_ci'));
+  toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
+  toggleSection('end_itr', done);
+  if (!!loadData(activePaperId)._complete !== done) {
+    saveData(activePaperId, { _complete: done });
+    renderSidebar();
+  }
 }
 
 function updateRouting() {
@@ -1312,23 +1320,19 @@ function updateRouting() {
     toggleSection('sec2b_block', q2no);
   }
 
-  // Q4 sufficiency → show/hide Q6 language block, Section 3, completion marker
+  // Q4 sufficiency → show/hide Q6 language block and Section 3
   const q4ps = isChecked('q4_ps');
-  const q4ci = isChecked('q4_ci');
   const q4un = isChecked('q4_un');
   toggleSection('q6_block', q4ps);
   toggleSection('sec3_block', q4ps || q4un);
-  toggleSection('ci_complete', q4ci);
 
   // Q — ITR in main paper → show 3C (no) or 3B (yes)
   const qItrMainYes = isChecked('q_itr_main_yes');
   const qItrMainNo  = isChecked('q_itr_main_no');
   toggleSection('sec3c_block', qItrMainNo);
 
-  // Q — ITR in supplementary → show completion marker (no) or 3B (yes)
+  // Q — ITR in supplementary → 3B (yes); "no" ends the protocol
   const qItrSuppYes = isChecked('q_itr_supp_yes');
-  const qItrSuppNo  = isChecked('q_itr_supp_no');
-  toggleSection('no_itr_complete', qItrSuppNo);
 
   // Section 3B shown if ITR found in either location
   toggleSection('sec3b_block', qItrMainYes || qItrSuppYes);
@@ -1654,8 +1658,8 @@ function buildForm(paperId) {
     ${qBlock('Q1', 'Have the authors shared any supplementary materials?',
       `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately.</p>
       ${cbOptions('q1', [
-        { text: 'Yes', route: '▶ Continue to Section 1B', routeClass: 'go', value: 'yes' },
-        { text: 'No', route: '▶ Skip to Section 2B', routeClass: 'skip', value: 'no' },
+        { text: 'Yes', value: 'yes' },
+        { text: 'No', value: 'no' },
       ])}`
     )}
 
@@ -1710,8 +1714,8 @@ function buildForm(paperId) {
 
       ${qBlock('Q2', 'Is any code shared by the authors?',
         cbOptions('q2', [
-          { text: 'Yes', route: '▶ Continue to Section 2A', routeClass: 'go', value: 'yes' },
-          { text: 'No', route: '▶ Skip to Section 2B', routeClass: 'skip', value: 'no' },
+          { text: 'Yes', value: 'yes' },
+          { text: 'No', value: 'no' },
         ])
       )}
 
@@ -1807,9 +1811,9 @@ function buildForm(paperId) {
 
       ${qBlock('Q4', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
         cbOptions('q4', [
-          { text: 'Potentially sufficient', route: '▶ Complete Q5 & Q6, then go to Section 3', routeClass: 'go', value: 'ps' },
-          { text: 'Unambiguously insufficient', route: '▶ Phase 1 complete — move to next paper', routeClass: 'done', value: 'ci' },
-          { text: 'Unable to open file(s)', route: '▶ Continue to Section 3', routeClass: 'note', value: 'un' },
+          { text: 'Potentially sufficient', value: 'ps' },
+          { text: 'Unambiguously insufficient', value: 'ci' },
+          { text: 'Unable to open file(s)', value: 'un' },
         ])
       )}
 
@@ -1884,7 +1888,8 @@ function buildForm(paperId) {
         `<textarea class="notes-area" data-key="q6_notes" placeholder="Any additional observations about the code or its location…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
-      ${condSection('ci_complete', completionMarker('Phase 1 complete for this paper (code unambiguously insufficient) — move to the next paper.'))}
+      ${condSection('end_ci', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
+
     `)}
 
     <!-- 2B conditional -->
@@ -1916,7 +1921,7 @@ function buildForm(paperId) {
         `<textarea class="notes-area" data-key="q7_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
-      ${completionMarker('Phase 1 complete for this paper — move to the next paper.')}
+      ${condSection('end_2b', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
     `)}
 
     <!-- �?�? SECTION 3 (conditional on Q4 = PS or unable to open) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
@@ -1948,8 +1953,8 @@ function buildForm(paperId) {
 
       ${qBlock('Q — ITR in main paper', 'Did you identify a suitable ITR in the main paper?',
         cbOptions('q_itr_main', [
-          { text: 'Yes', route: '▶ Continue to Section 3B', routeClass: 'go', value: 'yes' },
-          { text: 'No', route: '▶ Continue to Section 3C', routeClass: 'skip', value: 'no' },
+          { text: 'Yes', value: 'yes' },
+          { text: 'No', value: 'no' },
         ])
       )}
 
@@ -1977,11 +1982,11 @@ function buildForm(paperId) {
 
         ${qBlock('Q — ITR in supplementary materials', 'Did you identify a suitable ITR in the supplementary materials?',
           cbOptions('q_itr_supp', [
-            { text: 'Yes', route: '▶ Continue to Section 3B', routeClass: 'go', value: 'yes' },
-            { text: 'No', route: '▶ Phase 1 complete — move to next paper', routeClass: 'done', value: 'no' },
+            { text: 'Yes', value: 'yes' },
+            { text: 'No', value: 'no' },
           ])
         )}
-        ${condSection('no_itr_complete', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
+        ${condSection('end_no_itr', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
       `)}
 
       ${condSection('sec3b_block', `
@@ -2032,6 +2037,8 @@ function buildForm(paperId) {
           </div>`
         )}
 
+        ${condSection('end_itr', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
+
       `)}
     `)}
 
@@ -2055,6 +2062,7 @@ function buildForm(paperId) {
   // Re-save already-answered papers once, so answers saved by an older
   // version to questions the routing hides are cleared (see clearHiddenAnswers)
   if (Object.keys(data).some(k => /^q\d/.test(k))) collectAndSave();
+  updateCompletion();
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
