@@ -7,6 +7,7 @@ format:
     toc-float: true
     embed-resources: true
     page-layout: full
+    include-after-body: ref_isolate.html
 execute:
   echo: false
   warning: false

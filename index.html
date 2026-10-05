@@ -972,35 +972,48 @@ function pandocHeadingId(text) {
 }
 
 let _refAnchor = '';
+let _refPaperId = '';
 
 function updateRefPanel(paperId) {
   const iframe = document.getElementById('ref-iframe');
   if (!iframe) return;
   const data = paperId ? loadData(paperId) : {};
-  const anchor = data.meta_title ? pandocHeadingId(`${paperId}. ${data.meta_title}`) : '';
+  // Fall back to the bare "p005." prefix if no title is stored; the report's
+  // own script (R/ref_isolate.html) matches sections on that ID prefix.
+  const anchor = !paperId ? ''
+    : data.meta_title ? pandocHeadingId(`${paperId}. ${data.meta_title}`)
+    : paperId.toLowerCase() + '.';
   _refAnchor = anchor;
+  _refPaperId = paperId || '';
   const newSrc = 'support_file.html' + (anchor ? '#' + anchor : '');
   const isHashOnlyChange = iframe.src.split('#')[0].endsWith('support_file.html');
   iframe.src = newSrc;
   if (isHashOnlyChange) {
     // Changing only the #hash on an already-loaded iframe doesn't fire a fresh
-    // 'load' event, so re-apply the isolation styling directly here too.
+    // 'load' event, so re-apply the isolation directly here too.
     isolateRefSection();
   }
 }
 
-// Hide every paper section except the one matching _refAnchor, so the coder
-// can't scroll to an adjacent paper's report by accident. Applied at runtime
-// only (nothing is written back to support_file.html); silently no-ops if the
-// browser blocks cross-document access (e.g. plain file:// without a local server).
+// Hide every paper section except the active one, so the coder can't scroll
+// to an adjacent paper's report by accident. Applied at runtime only (nothing
+// is written back to support_file.html). The report listens for a postMessage
+// and isolates the section itself, which also works when index.html is opened
+// as a plain file:// (where direct access to the iframe's document is
+// blocked). The direct-DOM branch below is kept for support files generated
+// before that listener existed.
 function isolateRefSection() {
-  if (!_refAnchor) return;
+  if (!_refPaperId) return;
   const iframe = document.getElementById('ref-iframe');
   if (!iframe) return;
   try {
+    iframe.contentWindow.postMessage({ type: 'showPaper', id: _refPaperId }, '*');
+  } catch (e) {}
+  try {
     const doc = iframe.contentDocument;
     if (!doc) return;
-    const target = doc.getElementById(_refAnchor);
+    const prefix = _refPaperId.toLowerCase() + '.';
+    const target = [...doc.querySelectorAll('section.level2')].find(s => s.id.startsWith(prefix));
     if (!target) return;
     let style = doc.getElementById('_coder_isolate_style');
     if (!style) {
@@ -1008,10 +1021,11 @@ function isolateRefSection() {
       style.id = '_coder_isolate_style';
       doc.head.appendChild(style);
     }
-    style.textContent = `section.level2:not(#${CSS.escape(_refAnchor)}) { display: none !important; }
+    style.textContent = `section.level2:not(#${CSS.escape(target.id)}) { display: none !important; }
       #quarto-margin-sidebar { display: none !important; }`;
+    target.scrollIntoView();
   } catch (e) {
-    // Cross-origin restriction — fall back to the unfiltered anchor-scroll view.
+    // Cross-origin restriction (file://) — the postMessage above handles it.
   }
 }
 

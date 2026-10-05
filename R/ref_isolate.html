@@ -1,0 +1,43 @@
+<script>
+// Shows only one paper's section of this report. index.html embeds the report
+// in an iframe and tells it which paper to show, either via postMessage
+// ({type: 'showPaper', id: 'P005'}) or via the URL hash (#p005.some-title).
+// This runs inside the report itself because, when index.html is opened as a
+// local file (file://), browsers block the parent page from touching the
+// iframe's contents directly. Sections are matched on the "p005." ID prefix
+// of their anchor, so titles with odd characters can't break the match.
+(function () {
+  function showPaper(id) {
+    if (!id) return;
+    var prefix = String(id).toLowerCase() + '.';
+    var sections = document.querySelectorAll('section.level2');
+    var target = null;
+    sections.forEach(function (s) {
+      if (!target && s.id.indexOf(prefix) === 0) target = s;
+    });
+    if (!target) return;
+    sections.forEach(function (s) {
+      s.style.setProperty('display', s === target ? '' : 'none', 'important');
+    });
+    var toc = document.getElementById('quarto-margin-sidebar');
+    if (toc) toc.style.setProperty('display', 'none', 'important');
+    target.scrollIntoView();
+  }
+
+  function showFromHash() {
+    var m = decodeURIComponent(location.hash).match(/^#([^.]+)\./);
+    if (m) showPaper(m[1]);
+  }
+
+  window.addEventListener('message', function (e) {
+    if (e.data && e.data.type === 'showPaper') showPaper(e.data.id);
+  });
+  window.addEventListener('hashchange', showFromHash);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', showFromHash);
+  } else {
+    showFromHash();
+  }
+  window.addEventListener('load', showFromHash);
+})();
+</script>
