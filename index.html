@@ -220,6 +220,8 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 }
 #collapse-btn { background: #f0f0ee; color: var(--ink-mid); }
 #collapse-btn:hover { background: #e4e4e0; }
+#clear-paper-btn { background: #fce4d6; color: var(--warn-dark); }
+#clear-paper-btn:hover { background: #f8d0b8; }
 #download-btn { background: var(--green-bg); color: var(--green-dark); }
 #download-btn:hover { background: #c6e3b4; }
 #saved-indicator {
@@ -697,6 +699,7 @@ code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding:
       <button class="top-btn" id="ref-toggle-btn" onclick="toggleRefPanel()">Hide/Show Report</button>
       <button class="top-btn" id="collapse-btn" onclick="toggleAllInstructions()">Collapse all instructions</button>
 
+      <button class="top-btn" id="clear-paper-btn" onclick="clearCurrentPaper()">Clear this paper</button>
       <button class="top-btn" id="download-btn">⬇ Download backup</button>
     </div>
 
@@ -945,6 +948,23 @@ function renderSidebar() {
   });
 }
 
+// Removes every answer for the current paper (questions, notes, ITR details,
+// screenshot, date) after confirmation. The paper's fixed metadata and the
+// coder ID are kept.
+const KEEP_ON_CLEAR = ['meta_id', 'meta_year', 'meta_authors', 'meta_title', 'meta_journal', 'meta_doi', 'meta_reproducer'];
+function clearCurrentPaper() {
+  if (!activePaperId) return;
+  const p = papers.find(x => x.id === activePaperId);
+  if (!confirm(`Are you sure you want to clear all answers for ${p.id} – ${p.title}? This cannot be undone.`)) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  const old = loadData(activePaperId);
+  store[activePaperId] = {};
+  KEEP_ON_CLEAR.forEach(k => { if (k in old) store[activePaperId][k] = old[k]; });
+  saveData(activePaperId, {});
+  selectPaper(activePaperId);
+}
+
 function selectPaper(id) {
   flushSave();
   activePaperId = id;
@@ -1049,7 +1069,7 @@ function toggleRefPanel() {
   const handle = document.getElementById('resize-handle');
   const btn = document.getElementById('ref-toggle-btn');
   const hidden = panel.classList.toggle('hidden');
-  handle.style.display = hidden ? 'none' : '';
+  if (handle) handle.style.display = hidden ? 'none' : '';
   btn.textContent = 'Hide/Show Report';
 }
 
@@ -1637,6 +1657,7 @@ function buildForm(paperId) {
         <span class="callout-label">ℹ Notes</span>
         <p>If the paper links to the paper DOI and describes that supplementary materials are shared at the website of the journal, please follow this link and identify the shared supplements at the journal webpage.</p>
         <p>Links to OSF may not always work well at the first click. If you are redirected to the wrong OSF page (often the login page), please try clicking the link again.</p>
+        <p>Links in the Links and Keywords Report are extracted automatically from the PDF and are not always shown perfectly (e.g., a link may be cut off, contain extra characters or spaces, or be merged with surrounding text). If a link gives an error, check the link in the paper PDF and correct it before concluding that the materials are unavailable.</p>
       </div>`
     )}
 
@@ -1938,7 +1959,9 @@ function buildForm(paperId) {
       ${instr('Read instructions for Section 3A',
         `<ol>
           <li>Open the full-text PDF (linked in the Links and Keywords Report).</li>
-          <li>Find the first exact numerical result in a table or figure that followed from a <u>simulation study that evaluates a statistical method</u>. Work through the document from beginning to end, and work through tables and figures left to right and top to bottom (as you would read normal English text). If multiple numerical results are reported together (e.g., a mean and standard deviation in the same cell), select only the first one.</li>
+          <li>Find an exact numerical result in a table or figure that followed from a <u>simulation study that evaluates a statistical method</u>.</li>
+          <li>Work through the document from <u>end to beginning</u>: start with the last table or figure in the paper and work backwards. Within a table or figure, work left to right and top to bottom (as you would read normal English text), so the first suitable result is the one closest to the top-left cell.</li>
+          <li>If multiple numerical results are reported together (e.g., a mean and standard deviation in the same cell), select only the first one.</li>
           <li>Answer the question below.</li>
         </ol>
         <div class="callout warn">
@@ -1947,7 +1970,7 @@ function buildForm(paperId) {
         </div>
         <div class="callout info">
           <span class="callout-label">ℹ Note</span>
-          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result. The result must be reported in a figure or table. In-text results do not qualify as an ITR.
+          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result in the order described above. The result must be reported in a figure or table. In-text results do not qualify as an ITR.
         </div>`
       )}
 
@@ -1995,7 +2018,7 @@ function buildForm(paperId) {
 
         ${instr('Read instructions for Section 3B',
           `<ol>
-            <li>Record all information about the numerical result in the fields below.</li>
+            <li>Record all information about the numerical result in the fields below. For the page number, report the page number as printed on the page by the journal, not the position of the page in the PDF file (e.g., if the result is on the 3rd page of the PDF and that page is numbered 1247, report 1247). If no page number is printed on the page, report the page number of the PDF instead and mention this in the General notes.</li>
             <li>Take a screenshot that shows both the result and the caption of the table or figure. If the table or figure is too large to capture in full, include enough of it to allow easy identification later on.</li>
             <li>Highlight the specific ITR in the screenshot, preferably in yellow. You can highlight using your PDF reader or the screenshot tool on your computer.</li>
             <li>Paste the screenshot into the screenshot field below.</li>
@@ -2009,8 +2032,8 @@ function buildForm(paperId) {
               <input type="text" class="q-input" data-key="itr_value" placeholder="e.g. 0.87" oninput="triggerSave()" style="width:100%">
             </div>
             <div>
-              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Page number</label>
-              <input type="text" class="q-input" data-key="itr_page" placeholder="e.g. 12" oninput="triggerSave()" style="width:100%">
+              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Page number (as printed on the page)</label>
+              <input type="text" class="q-input" data-key="itr_page" placeholder="e.g. 1247" oninput="triggerSave()" style="width:100%">
             </div>
             <div>
               <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Figure / Table with number</label>
