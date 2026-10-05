@@ -780,10 +780,26 @@ function loadData(paperId) {
   if (!store[paperId]) {
     try {
       const raw = localStorage.getItem('proto_' + paperId);
-      if (raw) store[paperId] = JSON.parse(raw);
+      if (raw) store[paperId] = migrateOldKeys(JSON.parse(raw));
     } catch(e) {}
   }
   return store[paperId] || {};
+}
+
+// Variable names used to lag one number behind the protocol from Q3 onwards
+// (README was q_readme, Q4 was q3, Q5 q4_*, Q6 q5_*, Q7 q6_*). Data saved by
+// that version — in the browser or in a backup JSON — is renamed on load so
+// coders don't lose answers. Detected by keys that only the old version wrote.
+const OLD_KEY_RE = /^(q_readme|q3_(ps|ci|un)$|q4_(source|link|notes)_\d+$|q5_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear|other_text)$|q6_(not_mentioned|broken|empty|request|restricted)$)/;
+function migrateOldKeys(data) {
+  if (!data || !Object.keys(data).some(k => OLD_KEY_RE.test(k))) return data;
+  const out = {};
+  Object.entries(data).forEach(([k, v]) => {
+    const nk = k.startsWith('q_readme') ? 'q3' + k.slice('q_readme'.length)
+      : k.replace(/^q([3-6])_/, (_, n) => `q${+n + 1}_`);
+    out[nk] = v;
+  });
+  return out;
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
@@ -817,6 +833,7 @@ document.getElementById('login-coder-id').addEventListener('keydown', e => {
 // Backup — download JSON / restore from JSON
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 async function downloadBackup() {
+  flushSave();
   const dateStr = new Date().toISOString().slice(0, 10);
   const coderStr = activeCoderId || 'coder';
 
@@ -867,7 +884,7 @@ function restoreFromBackup(input) {
       if (backup.records) {
         backup.records.forEach(r => {
           const { coder_id, paper_id, paper_title, ...data } = r;
-          saveData(paper_id, data);
+          saveData(paper_id, migrateOldKeys(data));
         });
       }
       if (backup.coder_id) {
@@ -940,6 +957,7 @@ function renderSidebar() {
 }
 
 function selectPaper(id) {
+  flushSave();
   activePaperId = id;
   renderSidebar();
   const p = papers.find(x => x.id === id);
@@ -1054,19 +1072,62 @@ function triggerSave() {
   if (!activePaperId) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    saveTimer = null;
     collectAndSave();
     showSavedIndicator();
   }, 800);
 }
 
+// Run a pending (debounced) save right now. Called before anything that
+// replaces the form or reads the stored data — switching papers, exporting,
+// closing the page — so the last edit is never dropped or saved to the
+// wrong paper.
+function flushSave() {
+  if (!saveTimer) return;
+  clearTimeout(saveTimer);
+  saveTimer = null;
+  collectAndSave();
+}
+
+// Answers to questions that the routing currently hides no longer apply (e.g.
+// Q4–Q6 after Q2 is changed to "No"), so they are cleared and the saved data
+// only holds answers the coder can see. Clearing one answer can hide further
+// sections (clearing Q4 hides Section 3), so repeat until nothing changes.
+function clearHiddenAnswers(form) {
+  for (let pass = 0; pass < 10; pass++) {
+    let changed = false;
+    form.querySelectorAll('[data-key]').forEach(el => {
+      if (inVisibleSection(el)) return;
+      if (el.type === 'checkbox') {
+        if (el.checked) {
+          el.checked = false;
+          el.closest('.cb-option')?.classList.remove('selected');
+          changed = true;
+        }
+      } else if (el.value) {
+        el.value = '';
+        changed = true;
+      }
+    });
+    const zone = document.getElementById('screenshot-zone');
+    if (zone && !inVisibleSection(zone) && zone.classList.contains('has-image')) {
+      clearScreenshot();
+      changed = true;
+    }
+    if (!changed) return;
+    updateRouting();
+  }
+}
+
 function collectAndSave() {
   if (!activePaperId) return;
   const form = document.getElementById('form-body');
+  clearHiddenAnswers(form);
   const data = {};
   const cbGroups = new Set();
   form.querySelectorAll('[data-key]').forEach(el => {
     if (el.type === 'checkbox') cbGroups.add(el.dataset.group);
-    else data[el.dataset.key] = el.value;
+    else data[el.dataset.key] = inVisibleSection(el) ? el.value : null;
   });
   // Checkbox groups: null on every option until one is selected, so "not yet
   // answered" is distinguishable from "this option wasn't the one selected".
@@ -1074,6 +1135,11 @@ function collectAndSave() {
     const opts = form.querySelectorAll(`[data-group="${group}"]`);
     const answered = Array.from(opts).some(o => o.checked);
     opts.forEach(o => { data[o.dataset.key] = answered ? o.checked : null; });
+  });
+  // Drop saved Q5 location rows that are no longer in the form (removed rows)
+  const saved = store[activePaperId] || {};
+  Object.keys(saved).forEach(k => {
+    if (/^q5_(source|link|notes)_\d+$/.test(k) && !(k in data)) delete saved[k];
   });
   // screenshot stored separately
   saveData(activePaperId, data);
@@ -1240,19 +1306,19 @@ function updateRouting() {
   // Q2 (code found in materials?) → show 2A or 2B
   const q2yes = isChecked('q2_yes');
   const q2no  = isChecked('q2_no');
-  toggleSection('q_readme_block', q2yes);
+  toggleSection('q3_block', q2yes);
   if (q1yes) {
     toggleSection('sec2a_block', q2yes);
     toggleSection('sec2b_block', q2no);
   }
 
-  // Q4 sufficiency (internal key q3) → show/hide Q6 language block, Section 3, completion marker
-  const q3ps = isChecked('q3_ps');
-  const q3ci = isChecked('q3_ci');
-  const q3un = isChecked('q3_un');
-  toggleSection('q5_block', q3ps);
-  toggleSection('sec3_block', q3ps || q3un);
-  toggleSection('ci_complete', q3ci);
+  // Q4 sufficiency → show/hide Q6 language block, Section 3, completion marker
+  const q4ps = isChecked('q4_ps');
+  const q4ci = isChecked('q4_ci');
+  const q4un = isChecked('q4_un');
+  toggleSection('q6_block', q4ps);
+  toggleSection('sec3_block', q4ps || q4un);
+  toggleSection('ci_complete', q4ci);
 
   // Q — ITR in main paper → show 3C (no) or 3B (yes)
   const qItrMainYes = isChecked('q_itr_main_yes');
@@ -1271,7 +1337,7 @@ function updateRouting() {
   toggleSection('itr_supp_link_block', qItrSuppYes);
 
   // Q6 "Other" language → show open answer field
-  toggleSection('q5_other_block', isChecked('q5_other'));
+  toggleSection('q6_other_block', isChecked('q6_other'));
 
 }
 
@@ -1348,15 +1414,15 @@ function isFormComplete() {
   if (!inputOk('meta_date')) return false;
   if (!groupOk('q1')) return false;
   if (!groupOk('q2')) return false;
-  if (!groupOk('q_readme')) return false;
   if (!groupOk('q3')) return false;
-  if (!inputOk('q4_source_0')) return false;
-  if (!inputOk('q4_link_0')) return false;
-  const q5sample = document.querySelector('[data-group="q5_langs"]');
-  if (q5sample && inVisibleSection(q5sample)) {
-    if (!document.querySelector('[data-group="q5_langs"]:checked')) return false;
+  if (!groupOk('q4')) return false;
+  if (!inputOk('q5_source_0')) return false;
+  if (!inputOk('q5_link_0')) return false;
+  const q6sample = document.querySelector('[data-group="q6_langs"]');
+  if (q6sample && inVisibleSection(q6sample)) {
+    if (!document.querySelector('[data-group="q6_langs"]:checked')) return false;
   }
-  if (!groupOk('q6')) return false;
+  if (!groupOk('q7')) return false;
   const sec3 = document.getElementById('sec3_block');
   if (sec3 && sec3.classList.contains('visible')) {
     if (!groupOk('q_itr_main')) return false;
@@ -1421,26 +1487,26 @@ function validateForm() {
   requireGroup('q2');
 
   // Q3 (README, sec1b_block)
-  requireGroup('q_readme');
+  requireGroup('q3');
 
   // Q4, Q5 (sec2a_block)
-  requireGroup('q3');
-  requireInput('q4_source_0');
-  requireInput('q4_link_0');
+  requireGroup('q4');
+  requireInput('q5_source_0');
+  requireInput('q5_link_0');
 
-  // Q6 (q5_block inside sec2a_block)
-  const q5sample = document.querySelector('[data-group="q5_langs"]');
-  if (q5sample && inVisibleSection(q5sample)) {
-    if (!document.querySelector('[data-group="q5_langs"]:checked')) {
-      const langBox = document.getElementById('q5-langs');
+  // Q6 (q6_block inside sec2a_block)
+  const q6sample = document.querySelector('[data-group="q6_langs"]');
+  if (q6sample && inVisibleSection(q6sample)) {
+    if (!document.querySelector('[data-group="q6_langs"]:checked')) {
+      const langBox = document.getElementById('q6-langs');
       if (langBox) langBox.classList.add('req-error-group');
-      errors.push('q5_langs');
-      addLabel(q5sample);
+      errors.push('q6_langs');
+      addLabel(q6sample);
     }
   }
 
   // Q7 (sec2b_block)
-  requireGroup('q6');
+  requireGroup('q7');
 
   // Section 3
   const sec3 = document.getElementById('sec3_block');
@@ -1450,6 +1516,7 @@ function validateForm() {
     const sec3c = document.getElementById('sec3c_block');
     if (sec3c && sec3c.classList.contains('visible')) {
       requireGroup('q_itr_supp');
+    }
 
     const sec3b = document.getElementById('sec3b_block');
     if (sec3b && sec3b.classList.contains('visible')) {
@@ -1457,7 +1524,6 @@ function validateForm() {
       requireInput('itr_page');
       requireInput('itr_table_num');
     }
-  }
   }
 
   return { errors, labels };
@@ -1476,6 +1542,7 @@ function validateAndContinue() {
   }
   if (overrideBtn) overrideBtn.style.display = 'none';
   // Mark complete and move to next paper
+  flushSave();
   saveData(activePaperId, { _complete: true });
   advanceToNextPaper();
 }
@@ -1648,7 +1715,7 @@ function buildForm(paperId) {
         ])
       )}
 
-      ${condSection('q_readme_block', `
+      ${condSection('q3_block', `
         ${instr('How to identify a README file',
           `<p>In the next question, please indicate if a README or similar file was shared by the authors.</p>
           <p>A README file is a plain-text or markdown document shared with the code that explains what the project is, how it's structured, and how to use it. It typically covers things like installation/setup instructions, how to run the code, dependencies required, file/folder structure, authorship, licensing, and contact information. The README file is typically the first file the owner of the code would want you to look at for you to make sense of the code that is available.</p>
@@ -1674,7 +1741,7 @@ function buildForm(paperId) {
         )}
 
         ${qBlock('Q3', 'Is a README or similar file provided with the code?',
-          cbOptions('q_readme', [
+          cbOptions('q3', [
             { text: 'Yes', value: 'yes' },
             { text: 'No', value: 'no' },
             { text: 'I am not sure', value: 'unsure' },
@@ -1682,7 +1749,7 @@ function buildForm(paperId) {
         )}
 
         ${qBlock('Notes', 'Notes',
-          `<textarea class="notes-area" data-key="q_readme_notes" placeholder="Explain if unsure, or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
+          `<textarea class="notes-area" data-key="q3_notes" placeholder="Explain if unsure, or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
         )}
       `)}
     `)}
@@ -1739,7 +1806,7 @@ function buildForm(paperId) {
       )}
 
       ${qBlock('Q4', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
-        cbOptions('q3', [
+        cbOptions('q4', [
           { text: 'Potentially sufficient', route: '▶ Complete Q5 & Q6, then go to Section 3', routeClass: 'go', value: 'ps' },
           { text: 'Unambiguously insufficient', route: '▶ Phase 1 complete — move to next paper', routeClass: 'done', value: 'ci' },
           { text: 'Unable to open file(s)', route: '▶ Continue to Section 3', routeClass: 'note', value: 'un' },
@@ -1758,12 +1825,12 @@ function buildForm(paperId) {
 
       ${qBlock('Q5', 'Location of the code',
         `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If code is available in multiple locations, use the + button to add extra rows.</p>
-        <div id="q4-locations">
-          <div class="q4-row" style="margin-bottom:12px;">
+        <div id="q5-locations">
+          <div class="q5-row" style="margin-bottom:12px;">
             <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
               <div>
                 <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
-                <select class="q-select" data-key="q4_source_0" onchange="triggerSave()" style="width:100%">
+                <select class="q-select" data-key="q5_source_0" onchange="triggerSave()" style="width:100%">
                   <option value="">— Select —</option>
                   <option>Journal website</option>
                   <option>External repository</option>
@@ -1771,50 +1838,50 @@ function buildForm(paperId) {
               </div>
               <div>
                 <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
-                <input type="text" class="q-input" data-key="q4_link_0" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+                <input type="text" class="q-input" data-key="q5_link_0" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
               </div>
               <div style="padding-bottom:1px;">
-                <button onclick="addQ4Row()" style="padding:8px 12px;background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:5px;color:var(--accent);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Add another location">+</button>
+                <button onclick="addQ5Row()" style="padding:8px 12px;background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:5px;color:var(--accent);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Add another location">+</button>
               </div>
             </div>
             <div>
               <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
-              <textarea class="notes-area" data-key="q4_notes_0" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+              <textarea class="notes-area" data-key="q5_notes_0" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
             </div>
           </div>
         </div>`
       )}
 
-      ${condSection('q5_block', `
+      ${condSection('q6_block', `
         ${qBlock('Q6', 'In which programming language(s) was the simulation conducted? (select all that apply)',
-          `<div id="q5-langs" class="cb-options">
+          `<div id="q6-langs" class="cb-options">
             ${[
-              ['q5_r',       'R'],
-              ['q5_python',  'Python'],
-              ['q5_matlab',  'MATLAB'],
-              ['q5_stata',   'Stata'],
-              ['q5_julia',   'Julia'],
-              ['q5_spss',    'SPSS'],
-              ['q5_mplus',   'MPlus'],
-              ['q5_c_cpp',   'C/C++'],
-              ['q5_shell',   'Shell'],
-              ['q5_unclear', 'Unclear'],
-              ['q5_other',   'Other'],
+              ['q6_r',       'R'],
+              ['q6_python',  'Python'],
+              ['q6_matlab',  'MATLAB'],
+              ['q6_stata',   'Stata'],
+              ['q6_julia',   'Julia'],
+              ['q6_spss',    'SPSS'],
+              ['q6_mplus',   'MPlus'],
+              ['q6_c_cpp',   'C/C++'],
+              ['q6_shell',   'Shell'],
+              ['q6_unclear', 'Unclear'],
+              ['q6_other',   'Other'],
             ].map(([key, label]) => `
               <label class="cb-option">
-                <input type="checkbox" data-key="${key}" data-group="q5_langs" data-multi="true" onchange="handleCbChange(this)">
+                <input type="checkbox" data-key="${key}" data-group="q6_langs" data-multi="true" onchange="handleCbChange(this)">
                 <span class="opt-text">${label}</span>
               </label>`).join('')}
           </div>
-          <div class="conditional-section" id="q5_other_block" style="margin-top:10px;">
+          <div class="conditional-section" id="q6_other_block" style="margin-top:10px;">
             <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Please specify the other language(s)</label>
-            <input type="text" class="q-input" data-key="q5_other_text" placeholder="e.g. SAS" oninput="triggerSave()" style="width:100%">
+            <input type="text" class="q-input" data-key="q6_other_text" placeholder="e.g. SAS" oninput="triggerSave()" style="width:100%">
           </div>`
         )}
       `)}
 
       ${qBlock('Notes', 'Additional notes on code evaluation',
-        `<textarea class="notes-area" data-key="q5_notes" placeholder="Any additional observations about the code or its location…" oninput="triggerSave()" rows="3"></textarea>`
+        `<textarea class="notes-area" data-key="q6_notes" placeholder="Any additional observations about the code or its location…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
       ${condSection('ci_complete', completionMarker('Phase 1 complete for this paper (code unambiguously insufficient) — move to the next paper.'))}
@@ -1831,22 +1898,22 @@ function buildForm(paperId) {
       ${qBlock('Q7', 'Why is code not openly available? (select all that apply)',
         `<div class="cb-options">
           ${[
-            ['q6_not_mentioned',  'Code sharing is not mentioned in the paper'],
-            ['q6_broken',         'Paper states that code is shared, but the link to the code is broken (leads to an error page or website does not exist)'],
-            ['q6_empty',          'Paper states that code is shared, but the code is not available at the linked location (repository is empty or contains only files not related to code)'],
-            ['q6_request',        'Code is available upon request'],
-            ['q6_restricted',     'Code is available with restricted access (you need permission before being able to access materials)'],
-            ['q6_other',          'Other (please describe why code is not available in the notes box below)'],
+            ['q7_not_mentioned',  'Code sharing is not mentioned in the paper'],
+            ['q7_broken',         'Paper states that code is shared, but the link to the code is broken (leads to an error page or website does not exist)'],
+            ['q7_empty',          'Paper states that code is shared, but the code is not available at the linked location (repository is empty or contains only files not related to code)'],
+            ['q7_request',        'Code is available upon request'],
+            ['q7_restricted',     'Code is available with restricted access (you need permission before being able to access materials)'],
+            ['q7_other',          'Other (please describe why code is not available in the notes box below)'],
           ].map(([key, text]) => `
             <label class="cb-option" id="opt_${key}">
-              <input type="checkbox" data-key="${key}" data-group="q6" data-multi="true" onchange="handleCbChange(this)">
+              <input type="checkbox" data-key="${key}" data-group="q7" data-multi="true" onchange="handleCbChange(this)">
               <span class="opt-text">${text}</span>
             </label>`).join('')}
         </div>`
       )}
 
       ${qBlock('Notes', 'Additional notes on unavailability',
-        `<textarea class="notes-area" data-key="q6_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
+        `<textarea class="notes-area" data-key="q7_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
       ${completionMarker('Phase 1 complete for this paper — move to the next paper.')}
@@ -1961,6 +2028,7 @@ function buildForm(paperId) {
                   <div class="zone-hint">Or drag and drop an image file</div>
                 </div>
               </div>
+            </div>
           </div>`
         )}
 
@@ -1984,6 +2052,9 @@ function buildForm(paperId) {
   // Restore saved values
   restoreForm(paperId);
   updateRouting();
+  // Re-save already-answered papers once, so answers saved by an older
+  // version to questions the routing hides are cleared (see clearHiddenAnswers)
+  if (Object.keys(data).some(k => /^q\d/.test(k))) collectAndSave();
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
@@ -1991,6 +2062,11 @@ function buildForm(paperId) {
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 function restoreForm(paperId) {
   const data = loadData(paperId);
+  // Recreate the extra Q5 location rows (the form is built with only row 0)
+  const maxRow = Math.max(0, ...Object.entries(data)
+    .filter(([, v]) => v !== null && v !== '')
+    .map(([k]) => k.match(/^q5_(source|link|notes)_(\d+)$/)).filter(Boolean).map(m => +m[2]));
+  for (let i = 1; i <= maxRow; i++) addQ5Row();
   Object.entries(data).forEach(([key, val]) => {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) return;
@@ -2021,6 +2097,10 @@ function screenshotHasImageHTML(src) {
 
 function deleteScreenshot(e) {
   e.stopPropagation();
+  clearScreenshot();
+}
+
+function clearScreenshot() {
   const zone = document.getElementById('screenshot-zone');
   zone.classList.remove('has-image');
   zone.innerHTML = `
@@ -2070,24 +2150,24 @@ function handleDrop(e) {
 
 
 function esc(val) {
-  return val ? String(val).replace(/"/g, '&quot;').replace(/</g, '&lt;') : '';
+  return val ? String(val).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;') : '';
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-// Dynamic Q5 location rows (internal key q4)
+// Dynamic Q5 location rows
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-function addQ4Row() {
-  const container = document.getElementById('q4-locations');
+function addQ5Row() {
+  const container = document.getElementById('q5-locations');
   if (!container) return;
-  const idx = container.querySelectorAll('.q4-row').length;
+  const idx = container.querySelectorAll('.q5-row').length;
   const row = document.createElement('div');
-  row.className = 'q4-row';
+  row.className = 'q5-row';
   row.style.cssText = 'margin-bottom:12px;';
   row.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
       <div>
         <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
-        <select class="q-select" data-key="q4_source_${idx}" onchange="triggerSave()" style="width:100%">
+        <select class="q-select" data-key="q5_source_${idx}" onchange="triggerSave()" style="width:100%">
           <option value="">— Select —</option>
           <option>Journal website</option>
           <option>External repository</option>
@@ -2095,46 +2175,29 @@ function addQ4Row() {
       </div>
       <div>
         <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
-        <input type="text" class="q-input" data-key="q4_link_${idx}" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+        <input type="text" class="q-input" data-key="q5_link_${idx}" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
       </div>
       <div style="padding-bottom:1px;">
-        <button onclick="this.closest('.q4-row').remove();triggerSave();" style="padding:8px 12px;background:#fce4d6;border:1px solid #e8a07a;border-radius:5px;color:var(--warn-dark);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Remove this row">−</button>
+        <button onclick="removeQ5Row(this)" style="padding:8px 12px;background:#fce4d6;border:1px solid #e8a07a;border-radius:5px;color:var(--warn-dark);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Remove this row">−</button>
       </div>
     </div>
     <div>
       <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
-      <textarea class="notes-area" data-key="q4_notes_${idx}" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+      <textarea class="notes-area" data-key="q5_notes_${idx}" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
     </div>`;
   container.appendChild(row);
 }
 
-// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-// Dynamic Q6 language rows (internal key q5)
-// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-function addQ5Row() {
-  const container = document.getElementById('q5-langs');
-  if (!container) return;
-  const idx = container.querySelectorAll('.q5-row').length;
-  const row = document.createElement('div');
-  row.className = 'q5-row';
-  row.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;';
-  const langs = ['R','Python','MATLAB','Stata','Julia','SPSS','MPlus','C/C++','Shell','Other','Unclear'];
-  row.innerHTML = `
-    <div>
-      <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Code file / location</label>
-      <input type="text" class="q-input" data-key="q5_file_${idx}" placeholder="e.g. simulation.R or osf.io/xyz" oninput="triggerSave()" style="width:100%">
-    </div>
-    <div>
-      <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Language(s) <button onclick="this.closest('.q5-row').remove();triggerSave();" style="margin-left:8px;padding:1px 7px;background:#fce4d6;border:1px solid #e8a07a;border-radius:4px;color:var(--warn-dark);font-size:8pt;font-weight:700;cursor:pointer;" title="Remove this row">Remove</button></label>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1.5px solid var(--border);border-radius:5px;background:#fff;">
-        ${langs.map(lang => `
-          <label style="display:flex;align-items:center;gap:4px;font-size:9pt;cursor:pointer;">
-            <input type="checkbox" data-key="q5_lang_${idx}_${lang.toLowerCase().replace('/','_')}" data-group="q5_lang_${idx}" data-multi="true" onchange="handleCbChange(this)" style="accent-color:var(--accent-mid);">
-            ${lang}
-          </label>`).join('')}
-      </div>
-    </div>`;
-  container.appendChild(row);
+// Renumber the remaining rows so keys stay q5_*_0..n-1 without gaps or
+// duplicates; collectAndSave then drops the keys of the removed row.
+function removeQ5Row(btn) {
+  btn.closest('.q5-row').remove();
+  document.querySelectorAll('#q5-locations .q5-row').forEach((row, i) => {
+    row.querySelectorAll('[data-key]').forEach(el => {
+      el.dataset.key = el.dataset.key.replace(/_\d+$/, '_' + i);
+    });
+  });
+  triggerSave();
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
@@ -2148,6 +2211,7 @@ function hasUnsavedData() {
 }
 
 window.addEventListener('beforeunload', e => {
+  flushSave();
   if (hasUnsavedData()) {
     e.preventDefault();
     e.returnValue = ''; // required for the browser dialog to appear
