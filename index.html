@@ -1877,6 +1877,7 @@ function buildForm(paperId) {
         <div class="callout yellow">
           <span class="callout-label">⚠ Be Conservative</span>
           Please be conservative in answering Q5. Any code that could potentially be used to reproduce (part of) the simulations in the paper should be indicated as potentially sufficient. Only in cases where the code is <u>clearly and unambiguously</u> insufficient to reproduce the simulations should you indicate the code as being insufficient.
+          <p style="margin-top:8px">Only select <strong>"I am unsure"</strong> if you see a reason to suspect that the shared code is not the simulation code, but you are not certain enough to indicate the code as unambiguously insufficient. As described below, this is not about whether the code is error-free, but only about whether the code that is shared is the simulation code. If you have no such reason, indicate the code as potentially sufficient.</p>
         </div>
         <p>Take the following steps:</p>
         <ol type="1">
@@ -1892,7 +1893,7 @@ function buildForm(paperId) {
           <span class="callout-label">ℹ Important!</span>
           These steps should not take more than a few minutes. You should not meticulously evaluate the code. The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and belongs to the simulations reported in the paper, mark it as <u>potentially sufficient</u>, even if you notice errors that might prevent it from running.
         </div>
-        <p style="margin-top:10px"><strong>Examples (when in doubt, evaluate the code as potentially sufficient):</strong></p>
+        <p style="margin-top:10px"><strong>Examples (if you see no reason to suspect that the shared code is not the simulation code, evaluate the code as potentially sufficient):</strong></p>
         <table>
           <thead><tr><th style="width:72%">Situation</th><th>Decision</th></tr></thead>
           <tbody>
