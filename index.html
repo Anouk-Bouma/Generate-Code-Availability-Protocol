@@ -1645,7 +1645,7 @@ function buildForm(paperId) {
     ${instr('Read instructions for Section 1A',
       `<p>By the end of this section you should have... </p>
         <ul>
-          <li>...answered Q1 ("Have the authors shared any supplementary materials?")</li>
+          <li>...answered Q1 ("Are any supplementary materials available?")</li>
           <li>...opened all locations where supplementary materials may be stored, so you are ready for the next section</li>
         </ul>
         <p>Your answer to Q1 determines whether you proceed to Section 1B or Section 2B.</p>
@@ -1684,8 +1684,9 @@ function buildForm(paperId) {
       </ol>`
     )}
 
-    ${qBlock('Q1', 'Have the authors shared any supplementary materials?',
+    ${qBlock('Q1', 'Are any supplementary materials available?',
       `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately.</p>
+      <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if materials are mentioned but cannot be accessed (e.g., the link is broken, the location is empty, or materials are only available upon request or with restricted access). Materials on the journal website that you can access through your institution (e.g., behind a paywall) count as available.</p>
       ${cbOptions('q1', [
         { text: 'Yes', value: 'yes' },
         { text: 'No', value: 'no' },
@@ -1699,16 +1700,16 @@ function buildForm(paperId) {
       ${instr('Read instructions for Section 1B',
         `<p>By the end of this section you should have...</p>
         <ul>
-           <li>...answered Q2 (Is any code shared by the authors?) </li>
+           <li>...answered Q2 ("Is any code available?")</li>
            <li>...opened any supplementary materials that may contain code.</li>
         </ul>
-        <p>In this step, we evaluate whether <u>any</u> code is shared within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code was shared in Q2. The relevance of the code will be evaluated in a later step.</p>
+        <p>In this step, we evaluate whether <u>any</u> code is available within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code is available in Q2. The relevance of the code will be evaluated in a later step.</p>
         <p>Work through the steps below to answer Q2. You may answer Q2 if you worked through all steps below, or as soon as the stopping criterion is met.</p>
         <p>Code may be shared in a code file but is sometimes also available as text in a <code>.docx</code>, <code>.txt</code>, <code>.pdf</code>, or other type of file.</p>`
       )}
 
       ${instr('Step 1B.1) Check for code files',
-        `<p>Check whether the shared materials include openly available code files (files with an extension that indicates code/syntax). Common code file types include but are not limited to:</p>
+        `<p>Check whether the shared materials include code files (files with an extension that indicates code/syntax). Common code file types include but are not limited to:</p>
         <table>
           <thead><tr><th>Language</th><th>File type(s)</th></tr></thead>
           <tbody>
@@ -1741,11 +1742,12 @@ function buildForm(paperId) {
         </ol>`
       )}
 
-      ${qBlock('Q2', 'Is any code shared by the authors?',
-        cbOptions('q2', [
+      ${qBlock('Q2', 'Is any code available?',
+        `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if code is mentioned but cannot be accessed (e.g., the link is broken, the repository is empty or contains no code, or code is only available upon request or with restricted access). You can indicate the reason in the next question. Code on the journal website that you can access through your institution (e.g., behind a paywall) counts as available.</p>
+        ${cbOptions('q2', [
           { text: 'Yes', value: 'yes' },
           { text: 'No', value: 'no' },
-        ])
+        ])}`
       )}
 
       ${condSection('q3_block', `
