@@ -1363,6 +1363,10 @@ function updateRouting() {
   // Q6 "Other" language → show open answer field
   toggleSection('q6_other_block', isChecked('q6_other'));
 
+  // Q4 = unambiguously insufficient → Q4a (why); Q4a "Other" → description field
+  toggleSection('q4a_block', isChecked('q4_ci'));
+  toggleSection('q4a_other_block', isChecked('q4a_other'));
+
 }
 
 function isChecked(key) {
@@ -1440,6 +1444,8 @@ function isFormComplete() {
   if (!groupOk('q2')) return false;
   if (!groupOk('q3')) return false;
   if (!groupOk('q4')) return false;
+  if (!groupOk('q4a')) return false;
+  if (!inputOk('q4a_other_text')) return false;
   if (!inputOk('q5_source_0')) return false;
   if (!inputOk('q5_link_0')) return false;
   const q6sample = document.querySelector('[data-group="q6_langs"]');
@@ -1515,6 +1521,8 @@ function validateForm() {
 
   // Q4, Q5 (sec2a_block)
   requireGroup('q4');
+  requireGroup('q4a');
+  requireInput('q4a_other_text');
   requireInput('q5_source_0');
   requireInput('q5_link_0');
 
@@ -1649,9 +1657,9 @@ function buildForm(paperId) {
     )}
 
     ${instr('Step 1A.1) Evaluate links in the Links and Keywords Report',
-      `<p>For any link identified in the Links and Keywords Report, read the context and evaluate whether the link may contain any supplemental material (including code, data, or other materials).</p>
+      `<p>For any link identified in the Links and Keywords Report, read the context and evaluate whether the link may contain any supplementary materials (e.g., code, data, appendices).</p>
       <ol type="1">
-        <li>For any link that may contain code or other supplemental materials, click the link to check if materials are available at the linked location. (You do not have to open any materials yet.)</li>
+        <li>For any link that may contain supplementary materials (e.g., code, data, appendices), click the link to check if materials are available at the linked location. (You do not have to open any materials yet.)</li>
       </ol>
       <div class="callout info">
         <span class="callout-label">ℹ Notes</span>
@@ -1662,14 +1670,14 @@ function buildForm(paperId) {
     )}
 
     ${instr('Step 1A.2) Evaluate keyword matches in the Links and Keywords Report',
-      `<p>Evaluate whether any keywords that signal code sharing are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
+      `<p>Evaluate whether any keywords that signal the sharing of supplementary materials (e.g., code, data, appendices) are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
       <ol type="1">
-        <li>Check if there is any keyword context in which the availability of a supplement, code, or data is described. If so, use the description to locate these materials.</li>
+        <li>Check if there is any keyword context in which the availability of supplementary materials (e.g., code, data, appendices) is described. If so, use the description to locate these materials.</li>
       </ol>`
     )}
 
-    ${instr('Step 1A.3) Manual fallback (only if no code was found in Steps 1A.1 and 1A.2)',
-      `<p>This step is only necessary if Steps 1A.1 and 1A.2 have not led to any code, and the stopping criterion has not been reached. Please take the following steps to make sure that no code was missed:</p>
+    ${instr('Step 1A.3) Manual check for additional supplementary materials',
+      `<p>Unless the stopping criterion has been met, always take the following steps to make sure that no supplementary materials were missed, even if Steps 1A.1 and 1A.2 already identified some materials (code may be stored in a different location than other materials):</p>
       <ol type="1">
         <li>Open the paper PDF and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>.</li>
         <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help.</li>
@@ -1792,6 +1800,7 @@ function buildForm(paperId) {
         `<p>By the end of this section you should have...</p>
         <ul>
           <li>...answered Q4 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
+          <li>...answered Q4a (Why is the code unambiguously insufficient?), if you indicated in Q4 that the code is unambiguously insufficient</li>
           <li>...answered Q5 (Indicate the location of the code that is potentially sufficient to reproduce the simulations in the paper.)</li>
           <li>...answered Q6 (In which programming language(s) is the simulation code written?)</li>
         </ul>
@@ -1837,6 +1846,29 @@ function buildForm(paperId) {
           { text: 'Unable to open file(s)', value: 'un' },
         ])
       )}
+
+      ${condSection('q4a_block', `
+        ${qBlock('Q4a', 'Indicate why the code is unambiguously insufficient to computationally reproduce the simulation(s) in the paper. (select all that apply)',
+          `<div class="cb-options">
+            ${[
+              ['q4a_package',          'Code is a package but does not contain code to reproduce the simulation(s)'],
+              ['q4a_other_part',       'Code belongs to other part of the paper (e.g., empirical example)'],
+              ['q4a_example',          'Code is example/dummy code but is not the code to computationally reproduce the simulation(s)'],
+              ['q4a_different_study',  'Code belongs to a different study or project (e.g., shared by mistake)'],
+              ['q4a_description_only', 'Only a description of the code or simulation is shared (e.g., README, pseudocode), not actual code'],
+              ['q4a_other',            'Other'],
+            ].map(([key, text]) => `
+              <label class="cb-option" id="opt_${key}">
+                <input type="checkbox" data-key="${key}" data-group="q4a" data-multi="true" onchange="handleCbChange(this)">
+                <span class="opt-text">${text}</span>
+              </label>`).join('')}
+          </div>
+          <div class="conditional-section" id="q4a_other_block" style="margin-top:10px;">
+            <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Please describe why the code is insufficient</label>
+            <textarea class="notes-area" data-key="q4a_other_text" placeholder="" oninput="triggerSave()" rows="3" style="width:100%;"></textarea>
+          </div>`
+        )}
+      `)}
 
       ${instr('How to determine code location and links',
         `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If unsure, note this in the Notes box.</p>
