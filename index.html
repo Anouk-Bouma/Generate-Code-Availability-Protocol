@@ -777,13 +777,15 @@ function loadData(paperId) {
   return store[paperId] || {};
 }
 
-// Variable names used to lag one number behind the protocol from Q3 onwards
-// (README was q_readme, Q4 was q3, Q5 q4_*, Q6 q5_*, Q7 q6_*). Data saved by
-// that version — in the browser or in a backup JSON — is renamed on load so
-// coders don't lose answers. Detected by keys that only the old version wrote.
-const OLD_KEY_RE = /^(q_readme|q3_(ps|ci|un)$|q4_(source|link|notes)_\d+$|q5_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear|other_text)$|q6_(not_mentioned|broken|empty|request|restricted)$)/;
-function migrateOldKeys(data) {
-  if (!data || !Object.keys(data).some(k => OLD_KEY_RE.test(k))) return data;
+// Data saved by older versions of the protocol — in the browser or in a backup
+// JSON — is renamed on load so coders don't lose answers. Each version is
+// recognised by keys only that version wrote (every save writes all keys of
+// the form, so a saved record always contains them).
+//
+// Version 1: names lagged one number behind the questions from Q3 onwards
+// (README was q_readme, Q4 was q3, Q5 q4_*, Q6 q5_*, Q7 q6_*).
+const V1_KEY_RE = /^(q_readme|q3_(ps|ci|un)$|q5_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear|other_text)$|q6_(not_mentioned|broken|empty|request|restricted)$)/;
+function migrateV1(data) {
   const out = {};
   Object.entries(data).forEach(([k, v]) => {
     const nk = k.startsWith('q_readme') ? 'q3' + k.slice('q_readme'.length)
@@ -791,6 +793,32 @@ function migrateOldKeys(data) {
     out[nk] = v;
   });
   return out;
+}
+// Version 2: sufficiency was Q4 (q4_*), why insufficient Q4a (q4a_*), location
+// Q5 (q5_*), languages Q6 (q6_*), why unavailable Q7 (q7_*). Location moved to
+// Q4 and the rest shifted: q5_* → q4_*, q4_* → q5_*, q4a_* → q6_*, q6_* → q7_*,
+// q7_* → q8_*.
+// (Only keys that no later version uses — q6_other_text, for example, now
+// belongs to Q6 — so current data is never mistaken for version 2.)
+const V2_KEY_RE = /^(q4_(ps|ci|un)$|q4a_|q5_(source|link|notes)_\d+$|q6_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear)$|q7_(not_mentioned|broken|empty|request|restricted)$)/;
+function migrateV2(data) {
+  const out = {};
+  Object.entries(data).forEach(([k, v]) => {
+    const nk = k.startsWith('q4a_') ? 'q6_' + k.slice('q4a_'.length)
+      : k.startsWith('q4_') ? 'q5_' + k.slice('q4_'.length)
+      : k.startsWith('q5_') ? 'q4_' + k.slice('q5_'.length)
+      : k.startsWith('q6_') ? 'q7_' + k.slice('q6_'.length)
+      : k.startsWith('q7_') ? 'q8_' + k.slice('q7_'.length)
+      : k;
+    out[nk] = v;
+  });
+  return out;
+}
+function migrateOldKeys(data) {
+  if (!data) return data;
+  if (Object.keys(data).some(k => V1_KEY_RE.test(k))) data = migrateV1(data);
+  if (Object.keys(data).some(k => V2_KEY_RE.test(k))) data = migrateV2(data);
+  return data;
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
@@ -1100,9 +1128,9 @@ function flushSave() {
 }
 
 // Answers to questions that the routing currently hides no longer apply (e.g.
-// Q4–Q6 after Q2 is changed to "No"), so they are cleared and the saved data
+// Q3–Q7 after Q2 is changed to "No"), so they are cleared and the saved data
 // only holds answers the coder can see. Clearing one answer can hide further
-// sections (clearing Q4 hides Section 3), so repeat until nothing changes.
+// sections (clearing Q5 hides Section 3), so repeat until nothing changes.
 function clearHiddenAnswers(form) {
   for (let pass = 0; pass < 10; pass++) {
     let changed = false;
@@ -1146,10 +1174,10 @@ function collectAndSave() {
     const answered = Array.from(opts).some(o => o.checked);
     opts.forEach(o => { data[o.dataset.key] = answered ? o.checked : null; });
   });
-  // Drop saved Q5 location rows that are no longer in the form (removed rows)
+  // Drop saved Q4 location rows that are no longer in the form (removed rows)
   const saved = store[activePaperId] || {};
   Object.keys(saved).forEach(k => {
-    if (/^q5_(source|link|notes)_\d+$/.test(k) && !(k in data)) delete saved[k];
+    if (/^q4_(source|link|notes)_\d+$/.test(k) && !(k in data)) delete saved[k];
   });
   // screenshot stored separately
   saveData(activePaperId, data);
@@ -1306,14 +1334,16 @@ function handleCbChange(el) {
 }
 
 // The green "Phase 1 complete" marker sits at the end of every route through
-// the protocol (2B, Q4 = insufficient, ITR recorded, no ITR found). It is
-// shown only once every required question on the current route is answered,
-// and the paper's tick in the sidebar (_complete) always matches it.
+// the protocol (Q1/Q2 = paywall, 2B, Q5 = insufficient, ITR recorded, no ITR
+// found). It is shown only once every required question on the current route
+// is answered, and the paper's tick in the sidebar (_complete) always matches it.
 function updateCompletion() {
   if (!activePaperId) return;
   const done = isFormComplete();
+  toggleSection('end_paywall_q1', done && isChecked('q1_paywall'));
+  toggleSection('end_paywall_q2', done && isChecked('q2_paywall'));
   toggleSection('end_2b', done);
-  toggleSection('end_ci', done && isChecked('q4_ci'));
+  toggleSection('end_ci', done && isChecked('q5_ci'));
   toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
   toggleSection('end_itr', done);
   if (!!loadData(activePaperId)._complete !== done) {
@@ -1323,28 +1353,28 @@ function updateCompletion() {
 }
 
 function updateRouting() {
-  // Q1 (supplementary materials found?) → show Section 1B or jump to 2B
+  // Q1 (supplementary materials available?) → Yes: Section 1B; No: straight to
+  // 2B; paywall: protocol ends
   const q1yes = isChecked('q1_yes');
   const q1no  = isChecked('q1_no');
   toggleSection('sec1b_block', q1yes);
-  toggleSection('sec2_block', q1yes || q1no);
-  // If Q1=No, go directly to 2B (skip 2A)
-  toggleSection('sec2b_block', q1no);
 
-  // Q2 (code found in materials?) → show 2A or 2B
-  const q2yes = isChecked('q2_yes');
-  const q2no  = isChecked('q2_no');
+  // Q2 (code available?) → Yes: Q3 + Q4, then 2A; No: 2B; paywall: protocol ends
+  const q2yes = q1yes && isChecked('q2_yes');
+  const q2no  = q1yes && isChecked('q2_no');
   toggleSection('q3_block', q2yes);
-  if (q1yes) {
-    toggleSection('sec2a_block', q2yes);
-    toggleSection('sec2b_block', q2no);
-  }
+  toggleSection('q4_block', q2yes);
+  toggleSection('sec2_block', q2yes || q2no || q1no);
+  toggleSection('sec2a_block', q2yes);
+  toggleSection('sec2b_block', q2no || q1no);
 
-  // Q4 sufficiency → show/hide Q6 language block and Section 3
-  const q4ps = isChecked('q4_ps');
-  const q4un = isChecked('q4_un');
-  toggleSection('q6_block', q4ps);
-  toggleSection('sec3_block', q4ps || q4un);
+  // Q5 sufficiency → potentially sufficient / unsure: Q7 languages + Section 3;
+  // unable to open: Section 3; unambiguously insufficient: Q6 (why), then end
+  const q5ps     = isChecked('q5_ps');
+  const q5unsure = isChecked('q5_unsure');
+  const q5un     = isChecked('q5_un');
+  toggleSection('q7_block', q5ps || q5unsure);
+  toggleSection('sec3_block', q5ps || q5unsure || q5un);
 
   // Q — ITR in main paper → show 3C (no) or 3B (yes)
   const qItrMainYes = isChecked('q_itr_main_yes');
@@ -1360,12 +1390,12 @@ function updateRouting() {
   // Link to supplement only relevant if the ITR was found in the supplement
   toggleSection('itr_supp_link_block', qItrSuppYes);
 
-  // Q6 "Other" language → show open answer field
-  toggleSection('q6_other_block', isChecked('q6_other'));
+  // Q7 "Other" language → show open answer field
+  toggleSection('q7_other_block', isChecked('q7_other'));
 
-  // Q4 = unambiguously insufficient → Q4a (why); Q4a "Other" → description field
-  toggleSection('q4a_block', isChecked('q4_ci'));
-  toggleSection('q4a_other_block', isChecked('q4a_other'));
+  // Q5 = unambiguously insufficient → Q6 (why); Q6 "Other" → description field
+  toggleSection('q6_block', isChecked('q5_ci'));
+  toggleSection('q6_other_block', isChecked('q6_other'));
 
 }
 
@@ -1443,16 +1473,13 @@ function isFormComplete() {
   if (!groupOk('q1')) return false;
   if (!groupOk('q2')) return false;
   if (!groupOk('q3')) return false;
-  if (!groupOk('q4')) return false;
-  if (!groupOk('q4a')) return false;
-  if (!inputOk('q4a_other_text')) return false;
-  if (!inputOk('q5_source_0')) return false;
-  if (!inputOk('q5_link_0')) return false;
-  const q6sample = document.querySelector('[data-group="q6_langs"]');
-  if (q6sample && inVisibleSection(q6sample)) {
-    if (!document.querySelector('[data-group="q6_langs"]:checked')) return false;
-  }
-  if (!groupOk('q7')) return false;
+  if (!inputOk('q4_source_0')) return false;
+  if (!inputOk('q4_link_0')) return false;
+  if (!groupOk('q5')) return false;
+  if (!groupOk('q6')) return false;
+  if (!inputOk('q6_other_text')) return false;
+  if (!groupOk('q7_langs')) return false;
+  if (!groupOk('q8')) return false;
   const sec3 = document.getElementById('sec3_block');
   if (sec3 && sec3.classList.contains('visible')) {
     if (!groupOk('q_itr_main')) return false;
@@ -1516,29 +1543,19 @@ function validateForm() {
   // Q2 (sec1b_block)
   requireGroup('q2');
 
-  // Q3 (README, sec1b_block)
+  // Q3 (README) and Q4 (location), sec1b_block
   requireGroup('q3');
+  requireInput('q4_source_0');
+  requireInput('q4_link_0');
 
-  // Q4, Q5 (sec2a_block)
-  requireGroup('q4');
-  requireGroup('q4a');
-  requireInput('q4a_other_text');
-  requireInput('q5_source_0');
-  requireInput('q5_link_0');
+  // Q5, Q6 (why insufficient) and Q7 (languages), sec2a_block
+  requireGroup('q5');
+  requireGroup('q6');
+  requireInput('q6_other_text');
+  requireGroup('q7_langs');
 
-  // Q6 (q6_block inside sec2a_block)
-  const q6sample = document.querySelector('[data-group="q6_langs"]');
-  if (q6sample && inVisibleSection(q6sample)) {
-    if (!document.querySelector('[data-group="q6_langs"]:checked')) {
-      const langBox = document.getElementById('q6-langs');
-      if (langBox) langBox.classList.add('req-error-group');
-      errors.push('q6_langs');
-      addLabel(q6sample);
-    }
-  }
-
-  // Q7 (sec2b_block)
-  requireGroup('q7');
+  // Q8 (sec2b_block)
+  requireGroup('q8');
 
   // Section 3
   const sec3 = document.getElementById('sec3_block');
@@ -1669,29 +1686,33 @@ function buildForm(paperId) {
       </div>`
     )}
 
-    ${instr('Step 1A.2) Evaluate keyword matches in the Links and Keywords Report',
+    ${instr('Step 1A.2) Evaluate keyword matches and check the journal website',
       `<p>Evaluate whether any keywords that signal the sharing of supplementary materials (e.g., code, data, appendices) are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
       <ol type="1">
         <li>Check if there is any keyword context in which the availability of supplementary materials (e.g., code, data, appendices) is described. If so, use the description to locate these materials.</li>
+        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help.</li>
       </ol>`
     )}
 
-    ${instr('Step 1A.3) Manual check for additional supplementary materials',
-      `<p>Unless the stopping criterion has been met, always take the following steps to make sure that no supplementary materials were missed, even if Steps 1A.1 and 1A.2 already identified some materials (code may be stored in a different location than other materials):</p>
+    ${instr('Step 1A.3) Manual fallback (only if no supplementary materials were found in Steps 1A.1 and 1A.2)',
+      `<p>This step is only necessary if Steps 1A.1 and 1A.2 have not led to any supplementary materials, and the stopping criterion has not been reached. Please take the following step to make sure that no supplementary materials were missed:</p>
       <ol type="1">
-        <li>Open the paper PDF and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>.</li>
-        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help.</li>
+        <li>Open the paper (either on the journal website or by opening the PDF in the Links and Keywords Report) and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>.</li>
       </ol>`
     )}
 
     ${qBlock('Q1', 'Are any supplementary materials available?',
       `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately.</p>
       <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if materials are mentioned but cannot be accessed (e.g., the link is broken, the location is empty, or materials are only available upon request or with restricted access). Materials on the journal website that you can access through your institution (e.g., behind a paywall) count as available.</p>
+      <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If you need to check the journal website for supplementary materials but cannot access the paper because of a journal paywall, select "I am unable to access this paper because of journal paywall". The paper will then be assessed by an additional coder. This option is not meant to record how many papers are openly accessible: if your institution has access to the paper, please assess the paper.</p>
       ${cbOptions('q1', [
         { text: 'Yes', value: 'yes' },
         { text: 'No', value: 'no' },
+        { text: 'I am unable to access this paper because of journal paywall', value: 'paywall' },
       ])}`
     )}
+
+    ${condSection('end_paywall_q1', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
 
     <!-- �?�? SECTION 1B �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
     ${condSection('sec1b_block', `
@@ -1701,6 +1722,7 @@ function buildForm(paperId) {
         `<p>By the end of this section you should have...</p>
         <ul>
            <li>...answered Q2 ("Is any code available?")</li>
+           <li>...answered Q3 (README) and Q4 (location of the code), if code is available</li>
            <li>...opened any supplementary materials that may contain code.</li>
         </ul>
         <p>In this step, we evaluate whether <u>any</u> code is available within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code is available in Q2. The relevance of the code will be evaluated in a later step.</p>
@@ -1744,11 +1766,15 @@ function buildForm(paperId) {
 
       ${qBlock('Q2', 'Is any code available?',
         `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if code is mentioned but cannot be accessed (e.g., the link is broken, the repository is empty or contains no code, or code is only available upon request or with restricted access). You can indicate the reason in the next question. Code on the journal website that you can access through your institution (e.g., behind a paywall) counts as available.</p>
+        <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If you need to check the journal website for code but cannot access the paper because of a journal paywall, select "I am unable to access this paper because of journal paywall". The paper will then be assessed by an additional coder. This option is not meant to record how many papers are openly accessible: if your institution has access to the paper, please assess the paper.</p>
         ${cbOptions('q2', [
           { text: 'Yes', value: 'yes' },
           { text: 'No', value: 'no' },
+          { text: 'I am unable to access this paper because of journal paywall', value: 'paywall' },
         ])}`
       )}
+
+      ${condSection('end_paywall_q2', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
 
       ${condSection('q3_block', `
         ${instr('How to identify a README file',
@@ -1787,6 +1813,48 @@ function buildForm(paperId) {
           `<textarea class="notes-area" data-key="q3_notes" placeholder="Explain if unsure, or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
         )}
       `)}
+
+      ${condSection('q4_block', `
+        ${instr('How to determine code location and links',
+          `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If the code is printed in the article itself (e.g., in an appendix of the paper PDF), select "In article PDF". If unsure, note this in the Notes box.</p>
+          <p>Please provide the most specific link to the code possible:</p>
+          <ul>
+            <li>If the code is in a repository, link to the specific folder or file rather than the repository's main page.</li>
+            <li>If the code is on the journal website, try to link directly to the supplementary file: right-click the download link on the article page and select "Copy link address." Test the link to confirm it works.</li> 
+            <li>If no direct link is available, link to the article page instead. Please copy-paste the article link as provided in the Links and Keywords Report, to prevent institution-specific paywall links being filled out.</li>
+          </ul>`
+        )}
+
+        ${qBlock('Q4', 'Location of the code',
+          `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If code is available in multiple locations, use the + button to add extra rows.</p>
+          <div id="q4-locations">
+            <div class="q4-row" style="margin-bottom:12px;">
+              <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
+                <div>
+                  <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
+                  <select class="q-select" data-key="q4_source_0" onchange="triggerSave()" style="width:100%">
+                    <option value="">— Select —</option>
+                    <option>Journal website</option>
+                    <option>External repository</option>
+                    <option>In article PDF</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
+                  <input type="text" class="q-input" data-key="q4_link_0" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+                </div>
+                <div style="padding-bottom:1px;">
+                  <button onclick="addQ4Row()" style="padding:8px 12px;background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:5px;color:var(--accent);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Add another location">+</button>
+                </div>
+              </div>
+              <div>
+                <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
+                <textarea class="notes-area" data-key="q4_notes_0" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+              </div>
+            </div>
+          </div>`
+        )}
+      `)}
     `)}
 
     <!-- �?�? SECTION 2 �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
@@ -1801,15 +1869,14 @@ function buildForm(paperId) {
       ${instr('Read instructions for Section 2A',
         `<p>By the end of this section you should have...</p>
         <ul>
-          <li>...answered Q4 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
-          <li>...answered Q4a (Why is the code unambiguously insufficient?), if you indicated in Q4 that the code is unambiguously insufficient</li>
-          <li>...answered Q5 (Indicate the location of the code that is potentially sufficient to reproduce the simulations in the paper.)</li>
-          <li>...answered Q6 (In which programming language(s) is the simulation code written?)</li>
+          <li>...answered Q5 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
+          <li>...answered Q6 (Why is the code unambiguously insufficient?), if you indicated in Q5 that the code is unambiguously insufficient</li>
+          <li>...answered Q7 (In which programming language(s) is the simulation code written?), if you indicated in Q5 that the code is potentially sufficient or that you are unsure</li>
         </ul>
-        <p>In this section, we want to filter out articles for which the code that is shared is clearly not sufficient to reproduce <u>the simulations</u> in the article. We also want to know which programming language is used for the simulation code, and where the code is stored.</p>
+        <p>In this section, we want to filter out articles for which the code that is shared is clearly not sufficient to reproduce <u>the simulations</u> in the article. We also want to know which programming language is used for the simulation code.</p>
         <div class="callout yellow">
           <span class="callout-label">⚠ Be Conservative</span>
-          Please be conservative in answering Q4. Any code that could potentially be used to reproduce (part of) the simulations in the paper should be indicated as potentially sufficient. Only in cases where the code is <u>clearly and unambiguously</u> insufficient to reproduce the simulations should you indicate the code as being insufficient.
+          Please be conservative in answering Q5. Any code that could potentially be used to reproduce (part of) the simulations in the paper should be indicated as potentially sufficient. Only in cases where the code is <u>clearly and unambiguously</u> insufficient to reproduce the simulations should you indicate the code as being insufficient.
         </div>
         <p>Take the following steps:</p>
         <ol type="1">
@@ -1817,7 +1884,7 @@ function buildForm(paperId) {
           <li>Open any file containing code that you found in the previous steps that may be relevant to reproducing the simulations.
             <ul>
               <li>Files can often be inspected in online viewers in the repository where they are shared. You do not have to download the files.</li>
-              <li>If you cannot open or evaluate a relevant file due to its filetype (and an online viewer is not available), please indicate this in Q4. In this case, fill out the questions you can and continue to Section 3. A third coder will review the code for this paper.</li>
+              <li>If you cannot open or evaluate a relevant file due to its filetype (and an online viewer is not available), please indicate this in Q5. In this case, fill out the questions you can and continue to Section 3. A third coder will review the code for this paper.</li>
             </ul>
           <li>Scroll through the code files to see if there is any obvious indication that the file is irrelevant to reproduce the simulations in the paper.</li>
         </ol>
@@ -1841,106 +1908,68 @@ function buildForm(paperId) {
         </table>`
       )}
 
-      ${qBlock('Q4', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
-        cbOptions('q4', [
+      ${qBlock('Q5', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
+        cbOptions('q5', [
           { text: 'Potentially sufficient', value: 'ps' },
           { text: 'Unambiguously insufficient', value: 'ci' },
+          { text: 'I am unsure', value: 'unsure' },
           { text: 'Unable to open file(s)', value: 'un' },
         ])
       )}
 
-      ${condSection('q4a_block', `
-        ${qBlock('Q4a', 'Indicate why the code is unambiguously insufficient to computationally reproduce the simulation(s) in the paper. (select all that apply)',
+      ${condSection('q6_block', `
+        ${qBlock('Q6', 'Indicate why the code is unambiguously insufficient to computationally reproduce the simulation(s) in the paper. (select all that apply)',
           `<div class="cb-options">
             ${[
-              ['q4a_package',          'Code is a package but does not contain code to reproduce the simulation(s)'],
-              ['q4a_other_part',       'Code belongs to other part of the paper (e.g., empirical example)'],
-              ['q4a_example',          'Code is example/dummy code but is not the code to computationally reproduce the simulation(s)'],
-              ['q4a_different_study',  'Code belongs to a different study or project (e.g., shared by mistake)'],
-              ['q4a_description_only', 'Only a description of the code or simulation is shared (e.g., README, pseudocode), not actual code'],
-              ['q4a_other',            'Other'],
+              ['q6_package',          'Code is a package but does not contain code to reproduce the simulation(s)'],
+              ['q6_other_part',       'Code belongs to other part of the paper (e.g., empirical example)'],
+              ['q6_example',          'Code is example/dummy code but is not the code to computationally reproduce the simulation(s)'],
+              ['q6_different_study',  'Code belongs to a different study or project (e.g., shared by mistake)'],
+              ['q6_description_only', 'Only a description of the code or simulation is shared (e.g., README), not actual code'],
+              ['q6_other',            'Other'],
             ].map(([key, text]) => `
               <label class="cb-option" id="opt_${key}">
-                <input type="checkbox" data-key="${key}" data-group="q4a" data-multi="true" onchange="handleCbChange(this)">
+                <input type="checkbox" data-key="${key}" data-group="q6" data-multi="true" onchange="handleCbChange(this)">
                 <span class="opt-text">${text}</span>
               </label>`).join('')}
           </div>
-          <div class="conditional-section" id="q4a_other_block" style="margin-top:10px;">
+          <div class="conditional-section" id="q6_other_block" style="margin-top:10px;">
             <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Please describe why the code is insufficient</label>
-            <textarea class="notes-area" data-key="q4a_other_text" placeholder="" oninput="triggerSave()" rows="3" style="width:100%;"></textarea>
+            <textarea class="notes-area" data-key="q6_other_text" placeholder="" oninput="triggerSave()" rows="3" style="width:100%;"></textarea>
           </div>`
         )}
       `)}
 
-      ${instr('How to determine code location and links',
-        `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If unsure, note this in the Notes box.</p>
-        <p>Please provide the most specific link to the code possible:</p>
-        <ul>
-          <li>If the code is in a repository, link to the specific folder or file rather than the repository's main page.</li>
-          <li>If the code is on the journal website, try to link directly to the supplementary file: right-click the download link on the article page and select "Copy link address." Test the link to confirm it works.</li> 
-          <li>If no direct link is available, link to the article page instead. Please copy-paste the article link as provided in the Links and Keywords Report, to prevent institution-specific paywall links being filled out.</li>
-        </ul>`
-      )}
-
-      ${qBlock('Q5', 'Location of the code',
-        `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If code is available in multiple locations, use the + button to add extra rows.</p>
-        <div id="q5-locations">
-          <div class="q5-row" style="margin-bottom:12px;">
-            <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
-              <div>
-                <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
-                <select class="q-select" data-key="q5_source_0" onchange="triggerSave()" style="width:100%">
-                  <option value="">— Select —</option>
-                  <option>Journal website</option>
-                  <option>External repository</option>
-                </select>
-              </div>
-              <div>
-                <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
-                <input type="text" class="q-input" data-key="q5_link_0" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
-              </div>
-              <div style="padding-bottom:1px;">
-                <button onclick="addQ5Row()" style="padding:8px 12px;background:var(--accent-pale);border:1px solid var(--accent-light);border-radius:5px;color:var(--accent);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Add another location">+</button>
-              </div>
-            </div>
-            <div>
-              <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
-              <textarea class="notes-area" data-key="q5_notes_0" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
-            </div>
-          </div>
-        </div>`
-      )}
-
-      ${condSection('q6_block', `
-        ${qBlock('Q6', 'In which programming language(s) was the simulation conducted? (select all that apply)',
-          `<div id="q6-langs" class="cb-options">
+      ${condSection('q7_block', `
+        ${qBlock('Q7', 'In which programming language(s) was the simulation conducted? (select all that apply)',
+          `<div id="q7-langs" class="cb-options">
             ${[
-              ['q6_r',       'R'],
-              ['q6_python',  'Python'],
-              ['q6_matlab',  'MATLAB'],
-              ['q6_stata',   'Stata'],
-              ['q6_julia',   'Julia'],
-              ['q6_spss',    'SPSS'],
-              ['q6_mplus',   'MPlus'],
-              ['q6_c_cpp',   'C/C++'],
-              ['q6_shell',   'Shell'],
-              ['q6_unclear', 'Unclear'],
-              ['q6_other',   'Other'],
+              ['q7_r',       'R'],
+              ['q7_python',  'Python'],
+              ['q7_matlab',  'MATLAB'],
+              ['q7_stata',   'Stata'],
+              ['q7_julia',   'Julia'],
+              ['q7_spss',    'SPSS'],
+              ['q7_mplus',   'MPlus'],
+              ['q7_c_cpp',   'C/C++'],
+              ['q7_shell',   'Shell'],
+              ['q7_unclear', 'Unclear'],
+              ['q7_other',   'Other'],
             ].map(([key, label]) => `
               <label class="cb-option">
-                <input type="checkbox" data-key="${key}" data-group="q6_langs" data-multi="true" onchange="handleCbChange(this)">
+                <input type="checkbox" data-key="${key}" data-group="q7_langs" data-multi="true" onchange="handleCbChange(this)">
                 <span class="opt-text">${label}</span>
               </label>`).join('')}
           </div>
-          <div class="conditional-section" id="q6_other_block" style="margin-top:10px;">
+          <div class="conditional-section" id="q7_other_block" style="margin-top:10px;">
             <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Please specify the other language(s)</label>
-            <input type="text" class="q-input" data-key="q6_other_text" placeholder="e.g. SAS" oninput="triggerSave()" style="width:100%">
+            <input type="text" class="q-input" data-key="q7_other_text" placeholder="e.g. SAS" oninput="triggerSave()" style="width:100%">
           </div>`
         )}
       `)}
 
       ${qBlock('Notes', 'Additional notes on code evaluation',
-        `<textarea class="notes-area" data-key="q6_notes" placeholder="Any additional observations about the code or its location…" oninput="triggerSave()" rows="3"></textarea>`
+        `<textarea class="notes-area" data-key="q7_notes" placeholder="Any additional observations about the code…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
       ${condSection('end_ci', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
@@ -1955,31 +1984,31 @@ function buildForm(paperId) {
         `<p>In this section, we aim to identify the reason for code being unavailable. Please indicate which of the following applies. Multiple reasons may apply.</p>`
       )}
 
-      ${qBlock('Q7', 'Why is code not openly available? (select all that apply)',
+      ${qBlock('Q8', 'Why is code not openly available? (select all that apply)',
         `<div class="cb-options">
           ${[
-            ['q7_not_mentioned',  'Code sharing is not mentioned in the paper'],
-            ['q7_broken',         'Paper states that code is shared, but the link to the code is broken (leads to an error page or website does not exist)'],
-            ['q7_empty',          'Paper states that code is shared, but the code is not available at the linked location (repository is empty or contains only files not related to code)'],
-            ['q7_request',        'Code is available upon request'],
-            ['q7_restricted',     'Code is available with restricted access (you need permission before being able to access materials)'],
-            ['q7_other',          'Other (please describe why code is not available in the notes box below)'],
+            ['q8_not_mentioned',  'Code sharing is not mentioned in the paper'],
+            ['q8_broken',         'Paper states that code is shared, but the link to the code is broken (leads to an error page or website does not exist)'],
+            ['q8_empty',          'Paper states that code is shared, but the code is not available at the linked location (repository is empty or contains only files not related to code)'],
+            ['q8_request',        'Code is available upon request'],
+            ['q8_restricted',     'Code is available with restricted access (you need permission before being able to access materials)'],
+            ['q8_other',          'Other (please describe why code is not available in the notes box below)'],
           ].map(([key, text]) => `
             <label class="cb-option" id="opt_${key}">
-              <input type="checkbox" data-key="${key}" data-group="q7" data-multi="true" onchange="handleCbChange(this)">
+              <input type="checkbox" data-key="${key}" data-group="q8" data-multi="true" onchange="handleCbChange(this)">
               <span class="opt-text">${text}</span>
             </label>`).join('')}
         </div>`
       )}
 
       ${qBlock('Notes', 'Additional notes on unavailability',
-        `<textarea class="notes-area" data-key="q7_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
+        `<textarea class="notes-area" data-key="q8_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
       ${condSection('end_2b', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
     `)}
 
-    <!-- �?�? SECTION 3 (conditional on Q4 = PS or unable to open) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    <!-- �?�? SECTION 3 (conditional on Q5 = potentially sufficient, unsure or unable to open) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
     ${condSection('sec3_block', `
       <hr class="section-divider">
       ${secHeader('Section 3', 'Identify Item To Reproduce (ITR)')}
@@ -2004,7 +2033,7 @@ function buildForm(paperId) {
         </div>
         <div class="callout info">
           <span class="callout-label">ℹ Note</span>
-          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result in the order described above. The result must be reported in a figure or table. In-text results do not qualify as an ITR.
+          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result in the order described above. The result must be reported in a figure or table. In-text results do not qualify as an ITR. When recording the result, do not include any punctuation in the number other than the decimal point (e.g., type 12,000 as 12000 and 1,234.56 as 1234.56). Do keep a minus sign for negative values.
         </div>`
       )}
 
@@ -2063,7 +2092,7 @@ function buildForm(paperId) {
           `<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
             <div>
               <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Result (exact numerical value)</label>
-              <input type="text" class="q-input" data-key="itr_value" placeholder="e.g. 0.87" oninput="triggerSave()" style="width:100%">
+              <input type="text" class="q-input" data-key="itr_value" placeholder="e.g. 12000 or 0.87" oninput="triggerSave()" style="width:100%">
             </div>
             <div>
               <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Page number (as printed on the page)</label>
@@ -2127,11 +2156,11 @@ function buildForm(paperId) {
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 function restoreForm(paperId) {
   const data = loadData(paperId);
-  // Recreate the extra Q5 location rows (the form is built with only row 0)
+  // Recreate the extra Q4 location rows (the form is built with only row 0)
   const maxRow = Math.max(0, ...Object.entries(data)
     .filter(([, v]) => v !== null && v !== '')
-    .map(([k]) => k.match(/^q5_(source|link|notes)_(\d+)$/)).filter(Boolean).map(m => +m[2]));
-  for (let i = 1; i <= maxRow; i++) addQ5Row();
+    .map(([k]) => k.match(/^q4_(source|link|notes)_(\d+)$/)).filter(Boolean).map(m => +m[2]));
+  for (let i = 1; i <= maxRow; i++) addQ4Row();
   Object.entries(data).forEach(([key, val]) => {
     const el = document.querySelector(`[data-key="${key}"]`);
     if (!el) return;
@@ -2219,45 +2248,46 @@ function esc(val) {
 }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-// Dynamic Q5 location rows
+// Dynamic Q4 location rows
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-function addQ5Row() {
-  const container = document.getElementById('q5-locations');
+function addQ4Row() {
+  const container = document.getElementById('q4-locations');
   if (!container) return;
-  const idx = container.querySelectorAll('.q5-row').length;
+  const idx = container.querySelectorAll('.q4-row').length;
   const row = document.createElement('div');
-  row.className = 'q5-row';
+  row.className = 'q4-row';
   row.style.cssText = 'margin-bottom:12px;';
   row.innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:6px;">
       <div>
         <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Source type</label>
-        <select class="q-select" data-key="q5_source_${idx}" onchange="triggerSave()" style="width:100%">
+        <select class="q-select" data-key="q4_source_${idx}" onchange="triggerSave()" style="width:100%">
           <option value="">— Select —</option>
           <option>Journal website</option>
           <option>External repository</option>
+          <option>In article PDF</option>
         </select>
       </div>
       <div>
         <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Link to code</label>
-        <input type="text" class="q-input" data-key="q5_link_${idx}" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
+        <input type="text" class="q-input" data-key="q4_link_${idx}" placeholder="e.g. https://osf.io/xyz" oninput="triggerSave()" style="width:100%">
       </div>
       <div style="padding-bottom:1px;">
-        <button onclick="removeQ5Row(this)" style="padding:8px 12px;background:#fce4d6;border:1px solid #e8a07a;border-radius:5px;color:var(--warn-dark);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Remove this row">−</button>
+        <button onclick="removeQ4Row(this)" style="padding:8px 12px;background:#fce4d6;border:1px solid #e8a07a;border-radius:5px;color:var(--warn-dark);font-size:12pt;font-weight:700;cursor:pointer;line-height:1;" title="Remove this row">−</button>
       </div>
     </div>
     <div>
       <label style="font-size:8pt;font-weight:600;color:var(--ink-muted);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Notes</label>
-      <textarea class="notes-area" data-key="q5_notes_${idx}" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
+      <textarea class="notes-area" data-key="q4_notes_${idx}" placeholder="" oninput="triggerSave()" rows="2" style="width:100%;"></textarea>
     </div>`;
   container.appendChild(row);
 }
 
-// Renumber the remaining rows so keys stay q5_*_0..n-1 without gaps or
+// Renumber the remaining rows so keys stay q4_*_0..n-1 without gaps or
 // duplicates; collectAndSave then drops the keys of the removed row.
-function removeQ5Row(btn) {
-  btn.closest('.q5-row').remove();
-  document.querySelectorAll('#q5-locations .q5-row').forEach((row, i) => {
+function removeQ4Row(btn) {
+  btn.closest('.q4-row').remove();
+  document.querySelectorAll('#q4-locations .q4-row').forEach((row, i) => {
     row.querySelectorAll('[data-key]').forEach(el => {
       el.dataset.key = el.dataset.key.replace(/_\d+$/, '_' + i);
     });
