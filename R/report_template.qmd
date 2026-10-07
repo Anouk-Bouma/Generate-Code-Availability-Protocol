@@ -169,7 +169,7 @@ for (i in seq_len(nrow(articles))) {
               article$`DOI Link`, article$`DOI Link`))
   # Existence is always checked against the real corpus (pdf_path); the href
   # written into the report points there too UNLESS pdf_link_dir is set (by
-  # generate_coder_batch.R), in which case it points at a flat pdfs/<doi>.pdf
+  # 3_Generate_coder_batch.R), in which case it points at a flat pdfs/<doi>.pdf
   # path instead, matching where that script copies the batch's PDFs to.
   pdf_src <- pdf_lookup[article$doi_no_slash]
   if (!is.na(pdf_src)) {

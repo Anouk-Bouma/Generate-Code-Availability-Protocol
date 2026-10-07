@@ -134,16 +134,18 @@ paper_testbatch <- convert(
 Open and render. The only settings are in the **Configuration** chunk:
 
 ``` r
-bib_file    <- "all_articles_metadata.bib"
-xml_folder  <- "Articles All Records"
-output_file <- "auto_report_input_data.rds"
+bib_file           <- "all_articles_metadata.bib"
+xml_folder         <- "Articles All Records"
+output_file        <- "auto_report_input_data.rds"
+use_inclusion_file <- TRUE                # FALSE: keep every paper in the .bib (that has a DOI)
+inclusion_file     <- "all_articles.rds"  # only used when use_inclusion_file is TRUE
 ```
 
 What it does:
 
 1.  Reads the `.bib`, drops entries with no DOI, builds `doi_no_slash`.
-2.  Reads `all_articles.rds`, keeps `included == TRUE` DOIs, filters the metadata to those.
-3.  **Assigns IDs** `P001`, `P002`, … in row order of that filtered set.
+2.  If `use_inclusion_file` is `TRUE`: reads the inclusion file (`all_articles.rds`), keeps `included == TRUE` DOIs, filters the metadata to those. If `FALSE`: keeps every paper from the `.bib` that has a DOI.
+3.  **Assigns IDs** `P001`, `P002`, … in row order of the resulting set (always, whichever setting you use).
 4.  Parses every TEI-XML: title/abstract fallback, full body + back-matter text (with `[target-url]` appended after each hyperlink), and a clean `{url, context}` table.
 5.  Joins metadata ⨝ XML on `doi_no_slash` (BibTeX wins for title/abstract; XML fills gaps).
 6.  Extracts keyword contexts (3-sentence windows) for a fixed list of code/data-availability terms and gapped pairs like `available … request`.
@@ -152,10 +154,10 @@ What it does:
 
 **Checks to read in the console output:**
 
--   `Included N items` — matches the number of `TRUE` rows you expect.
+-   `Included N items` (only with an inclusion file) — matches the number of `TRUE` rows you expect. Without an inclusion file you see `No inclusion file used: keeping all N items` instead.
 -   `M of N articles matched to an XML file` — if `M` is unexpectedly low, PDF filenames don't match DOIs, or step 1 didn't produce those XMLs.
 
-> **About IDs:** `P###` is assigned by position in the included+DOI set. If you later add or remove papers from the `.bib` or change inclusion decisions and re-run step 2, the IDs can shift. Freeze your three inputs before you start cutting batches, and keep `auto_report_input_data.rds` stable for the whole coding round.
+> **About IDs:** `P###` is assigned by position in the included+DOI set (or the DOI set, without an inclusion file). If you later add or remove papers from the `.bib`, change inclusion decisions, or switch `use_inclusion_file`, and re-run step 2, the IDs can shift. Freeze your three inputs before you start cutting batches, and keep `auto_report_input_data.rds` stable for the whole coding round.
 
 ------------------------------------------------------------------------
 

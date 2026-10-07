@@ -8,7 +8,7 @@
 # by hand.
 #
 # Sourced by both 2_link_and_keyword_extraction.qmd's export chunk and
-# generate_coder_batch.R, so the two never drift apart.
+# 3_Generate_coder_batch.R, so the two never drift apart.
 
 # "Last, First; Last, First" from one paper's author vector.
 format_authors_string <- function(authors) {

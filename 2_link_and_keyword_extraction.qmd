@@ -39,7 +39,7 @@ inclusion_file     <- "all_articles.rds"  # needs columns doi_no_slash and inclu
 
 ## Read metadata from BibTeX
 
-Loads `all_articles_metadata.bib` with `bib2df`, then keeps `title`, `abstract`, `authors`, `year`, `journal`, `DOI`. Strips stray `{}` from titles. **Drops any entry without a DOI** (`filter(!is.na(DOI) & nzchar(DOI))`). Also builds `doi_no_slash` (DOI with `/` removed), which is the join key used everywhere else in the script. `authors`/`year`/`journal` aren't used by the report itself — they're carried through to `full_data`/`auto_report_input_data.rds` purely so `generate_coder_batch.R` can pre-fill the protocol's metadata fields (via `R/batch_json.R`) when it later packages a batch for a coder, without needing to re-read the `.bib` file itself.
+Loads `all_articles_metadata.bib` with `bib2df`, then keeps `title`, `abstract`, `authors`, `year`, `journal`, `DOI`. Strips stray `{}` from titles. **Drops any entry without a DOI** (`filter(!is.na(DOI) & nzchar(DOI))`). Also builds `doi_no_slash` (DOI with `/` removed), which is the join key used everywhere else in the script. `authors`/`year`/`journal` aren't used by the report itself — they're carried through to `full_data`/`auto_report_input_data.rds` purely so `3_Generate_coder_batch.R` can pre-fill the protocol's metadata fields (via `R/batch_json.R`) when it later packages a batch for a coder, without needing to re-read the `.bib` file itself.
 
 ```{r}
 #| echo: false
