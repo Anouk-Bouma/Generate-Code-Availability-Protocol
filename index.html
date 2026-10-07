@@ -1335,14 +1335,13 @@ function handleCbChange(el) {
 }
 
 // The green "Phase 1 complete" marker sits at the end of every route through
-// the protocol (Q1/Q2 = paywall, 2B, Q5 = insufficient or unable to open, ITR
+// the protocol (Q1 = paywall, 2B, Q5 = insufficient or unable to open, ITR
 // recorded, no ITR found). It is shown only once every required question on the current route
 // is answered, and the paper's tick in the sidebar (_complete) always matches it.
 function updateCompletion() {
   if (!activePaperId) return;
   const done = isFormComplete();
   toggleSection('end_paywall_q1', done && isChecked('q1_paywall'));
-  toggleSection('end_paywall_q2', done && isChecked('q2_paywall'));
   toggleSection('end_2b', done);
   toggleSection('end_2a', done && (isChecked('q5_ci') || isChecked('q5_un')));
   toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
@@ -1360,7 +1359,7 @@ function updateRouting() {
   const q1no  = isChecked('q1_no');
   toggleSection('sec1b_block', q1yes);
 
-  // Q2 (code available?) → Yes: Q3 + Q4, then 2A; No: 2B; paywall: protocol ends
+  // Q2 (code available?) → Yes: Q3 + Q4, then 2A; No: 2B
   const q2yes = q1yes && isChecked('q2_yes');
   const q2no  = q1yes && isChecked('q2_no');
   toggleSection('q3_block', q2yes);
@@ -1682,7 +1681,7 @@ function buildForm(paperId) {
       </ol>
       <div class="callout info">
         <span class="callout-label">ℹ Notes</span>
-        <p>If the paper links to the paper DOI and describes that supplementary materials are shared at the website of the journal, please follow this link and identify the shared supplements at the journal webpage.</p>
+        <p>If the paper links to the paper DOI and describes that supplementary materials are shared at the website of the journal, please follow this link and identify the shared supplements at the journal webpage. If these supplements are behind a paywall that you cannot access through your institution, answer Q1 with the third option ("I am unable to access the journal website or the supplementary materials shared there because of a paywall").</p>
         <p>Links to OSF may not always work well at the first click. If you are redirected to the wrong OSF page (often the login page), please try clicking the link again.</p>
         <p>Links in the Links and Keywords Report are extracted automatically from the PDF and are not always shown perfectly (e.g., a link may be cut off, contain extra characters or spaces, or be merged with surrounding text). If a link gives an error, check the link in the paper PDF and correct it before concluding that the materials are unavailable.</p>
       </div>`
@@ -1692,7 +1691,7 @@ function buildForm(paperId) {
       `<p>Evaluate whether any keywords that signal the sharing of supplementary materials (e.g., code, data, appendices) are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
       <ol type="1">
         <li>Check if there is any keyword context in which the availability of supplementary materials (e.g., code, data, appendices) is described. If so, use the description to locate these materials.</li>
-        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help.</li>
+        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help. If you cannot access the article page or its supplements because of a paywall (also not through your institution), answer Q1 with the third option ("I am unable to access the journal website or the supplementary materials shared there because of a paywall").</li>
       </ol>`
     )}
 
@@ -1706,7 +1705,7 @@ function buildForm(paperId) {
     ${instr('How to choose your answer in Q1',
       `<div class="callout green">
         <span class="callout-label">✔ Yes</span>
-        Select this if any supplementary materials (e.g., code, data, appendices) are available and you are able to access them. This includes materials that are behind a paywall but that you can access through your institution.
+        Select this if any supplementary materials (e.g., code, data) are available and you are able to access them. This includes materials that are behind a paywall but that you can access through your institution. If a paywall prevented you from checking the journal website, select the third option instead.
       </div>
       <div class="callout warn">
         <span class="callout-label">✖ No</span>
@@ -1720,8 +1719,14 @@ function buildForm(paperId) {
         <p style="margin-top:6px">You will indicate the reason in Q8.</p>
       </div>
       <div class="callout grey">
-        <span class="callout-label">⊘ I am unable to access the supplementary materials because of a journal paywall</span>
-        Select this if the supplementary materials are behind a journal paywall and you cannot access them yourself, also not through your institution. The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible materials: if your institution has access, please assess the materials.
+        <span class="callout-label">⊘ I am unable to access the journal website or the supplementary materials shared there because of a paywall</span>
+        Select this if one of the following applies, and you cannot get access through your institution either:
+        <ul>
+          <li>the stopping criterion has not been met, so you need to check the journal website for supplementary materials (Step 1A.2), but you cannot access the article page or its supplements because of a paywall;</li>
+          <li>the paper or the Links and Keywords Report indicates that supplementary materials are shared on the journal website, but you cannot access them (or some of them) because of a paywall.</li>
+        </ul>
+        <p style="margin-top:6px">Select this option even if you found other supplementary materials elsewhere (e.g., on OSF), because the materials on the journal website may contain the code. (If the other materials clearly contain the simulation code, the stopping criterion is met and you do not need to check the journal website.)</p>
+        <p style="margin-top:6px">The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible materials: if your institution has access, please assess the paper.</p>
       </div>`
     )}
 
@@ -1730,7 +1735,7 @@ function buildForm(paperId) {
       ${cbOptions('q1', [
         { text: 'Yes', value: 'yes' },
         { text: 'No', value: 'no' },
-        { text: 'I am unable to access the supplementary materials because of a journal paywall', value: 'paywall' },
+        { text: 'I am unable to access the journal website or the supplementary materials shared there because of a paywall', value: 'paywall' },
       ])}`
     )}
 
@@ -1801,10 +1806,6 @@ function buildForm(paperId) {
             <li>code is only available with restricted access.</li>
           </ul>
           <p style="margin-top:6px">You will indicate the reason in Q8.</p>
-        </div>
-        <div class="callout grey">
-          <span class="callout-label">⊘ I am unable to access the code because of a journal paywall</span>
-          Select this if the code is behind a journal paywall and you cannot access it yourself, also not through your institution. The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible code: if your institution has access, please assess the code.
         </div>`
       )}
 
@@ -1812,11 +1813,8 @@ function buildForm(paperId) {
         cbOptions('q2', [
           { text: 'Yes', value: 'yes' },
           { text: 'No', value: 'no' },
-          { text: 'I am unable to access the code because of a journal paywall', value: 'paywall' },
         ])
       )}
-
-      ${condSection('end_paywall_q2', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
 
       ${condSection('q3_block', `
         ${instr('How to identify a README file',
