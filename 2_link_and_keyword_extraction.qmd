@@ -17,17 +17,24 @@ library(bib2df)
 
 ## Configuration
 
-Just three settings, so you can point the script at different input/output files without touching the logic below.
+A few settings, so you can point the script at different input/output files without touching the logic below.
 
 ```{r}
 # BibTeX metadata file exported from Zotero
-bib_file <- "all_articles_metadata.bib"
+bib_file <- "Pilot3.bib"
 
 # Folder containing GROBID TEI-XML files for the pilot articles
-xml_folder <- "Articles All Records"
+xml_folder <- "Pilot3"
 
-# Output RDS file to be read by RUN_ME.qmd
+# Output RDS file with all results of this script. It is read by
+# 3_Generate_coder_batch.R and R/report_template.qmd; if you rename it, change
+# the file name there too (data_file).
 output_file <- "auto_report_input_data.rds"
+
+# Only keep the papers marked as included in an inclusion file? Set to FALSE
+# to keep every paper in the BibTeX file (that has a DOI).
+use_inclusion_file <- FALSE
+inclusion_file     <- "all_articles.rds"  # needs columns doi_no_slash and included
 ```
 
 ## Read metadata from BibTeX
@@ -53,20 +60,27 @@ meta_data <- bib_raw %>%
 
 message("Extracted ", nrow(meta_data), " items with a DOI from BibTeX")
 
-# Reading in inclusion data to create a vector of the included doi's
-included_dois <- readRDS("all_articles.rds") %>%
-  filter(included == TRUE) %>%
-  pull(doi_no_slash)
+if (use_inclusion_file) {
+  # Reading in inclusion data to create a vector of the included doi's
+  included_dois <- readRDS(inclusion_file) %>%
+    filter(included == TRUE) %>%
+    pull(doi_no_slash)
 
-message("Included ", length(included_dois), " items")
+  message("Included ", length(included_dois), " items")
 
-# Filter the meta_data df to contain only those items that are in the list of included doi's
+  # Filter the meta_data df to contain only those items that are in the list of included doi's
+  meta_data <- meta_data %>%
+    filter(doi_no_slash %in% included_dois)
+
+  message("Filtered meta data to include ", nrow(meta_data), " items")
+} else {
+  message("No inclusion file used: keeping all ", nrow(meta_data), " items")
+}
+
+# Add ID variable to the data frame (always needed: script 3, the report and
+# the batch JSON select and label papers by this ID)
 meta_data <- meta_data %>%
-  filter(doi_no_slash %in% included_dois) %>%
-  # Add ID variable to the data frame
   mutate(ID = sprintf("P%03d", row_number()))
-
-message("Filtered meta data to include ", nrow(meta_data), " items")
 ```
 
 ## Parse TEI XML files
@@ -280,7 +294,7 @@ full_data <- full_data %>%
 message("Keyword extraction complete")
 ```
 
-## Save pilot data
+## Save data
 
 Writes the whole thing to `auto_report_input_data.rds`. That file is then read straight in by `3_Generate_coder_batch.R` to generate the report.
 
