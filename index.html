@@ -1731,7 +1731,7 @@ function buildForm(paperId) {
     )}
 
     ${qBlock('Q1', 'Are any supplementary materials available?',
-      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately. <strong>Exception:</strong> if the paper PDF itself contains code (e.g., in an appendix), also answer "Yes". You will then answer Q2 with "Yes" and select "In article PDF" as the location in Q4.</p>
+      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately. <strong>Exception:</strong> if the paper PDF itself contains code (e.g., in an appendix), also answer "Yes".</p>
       ${cbOptions('q1', [
         { text: 'Yes', value: 'yes' },
         { text: 'No', value: 'no' },
@@ -1916,7 +1916,11 @@ function buildForm(paperId) {
         <p>In this section, we want to filter out papers for which the shared code is clearly not the code for <u>the simulations</u> in the paper. We also want to know which programming language is used for the simulation code.</p>
         <div class="callout info">
           <span class="callout-label">ℹ Key question</span>
-          Is the shared code the code that was (potentially) used to generate (part of) the results of the simulation(s) in the paper? This is <u>not</u> about whether the code is error-free or whether you are able to rerun it.
+          Is the shared code the code that was (potentially) used to generate (part of) the results of the simulation(s) in the paper?
+          <ul>
+            <li>The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and belongs to the simulations reported in the paper, mark it as potentially sufficient, even if you notice errors that might prevent it from running.</li>
+            <li>If you notice that the shared code does not include the code used to generate the results of the simulation studies reported in the paper (even if it is simulation code), select "Unambiguously insufficient", or "I am unsure" if you suspect this but are not certain.</li>
+          </ul>
         </div>
         <p>Take the following steps. This should not take more than a few minutes; you should not meticulously evaluate the code.</p>
         <ol type="1">
@@ -1944,6 +1948,7 @@ function buildForm(paperId) {
           <ul>
             <li>Code for a package that is developed in the paper, but no code for applying the package to run the simulations in the paper</li>
             <li>Code for a completely different study or project that appears to have been shared by mistake</li>
+            <li>Simulation code that is clearly not the code to generate the results of the simulation studies reported in the paper (e.g., it simulates something unrelated to these simulation studies)</li>
             <li>Code that exclusively relates to an empirical study in the same paper (e.g., processing survey data), with no simulation component whatsoever</li>
             <li>Example or dummy code that is not the code for the simulations in the paper</li>
           </ul>
@@ -1952,7 +1957,7 @@ function buildForm(paperId) {
           <span class="callout-label">? I am unsure</span>
           Only select this if:
           <ul>
-            <li>you see a reason to suspect that the shared code is not the simulation code, but you are not certain enough to indicate the code as unambiguously insufficient; <strong>or</strong></li>
+            <li>you see a reason to suspect that the shared code is not the code to generate the results of the simulation studies reported in the paper, but you are not certain enough to indicate the code as unambiguously insufficient; <strong>or</strong></li>
             <li>the code is written in a programming language you are unfamiliar with, and you cannot interpret it well enough to judge whether it belongs to the simulations in the paper.</li>
           </ul>
           <p style="margin-top:6px">If neither applies, select potentially sufficient.</p>
