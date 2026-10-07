@@ -420,9 +420,10 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 .instr-content .callout.warn { background: var(--warn-bg); border-left: 3px solid #c0714a; color: var(--warn-dark); }
 .instr-content .callout.info { background: var(--accent-pale); border-left: 3px solid var(--accent-mid); }
 .instr-content .callout.yellow { background: var(--yellow-bg); border-left: 3px solid #d4a800; color: var(--yellow-dark); }
+.instr-content .callout.green { background: var(--green-bg); border-left: 3px solid var(--green-dark); color: var(--green-dark); }
+.instr-content .callout.grey { background: #f0f0ee; border-left: 3px solid #9a9a96; color: var(--ink-mid); }
+.instr-content .callout ul { margin: 6px 0 0 18px; }
 .instr-content .callout-label { font-size: 7.5pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: block; margin-bottom: 5px; opacity: 0.7; }
-.instr-content .decision-ps { color: var(--green-dark); font-weight: 600; }
-.instr-content .decision-ci { color: var(--warn-dark); font-weight: 600; }
 
 /* ── Question blocks ─────────────────────────────────────────────── */
 .q-block {
@@ -1334,8 +1335,8 @@ function handleCbChange(el) {
 }
 
 // The green "Phase 1 complete" marker sits at the end of every route through
-// the protocol (Q1/Q2 = paywall, 2B, Q5 = insufficient, ITR recorded, no ITR
-// found). It is shown only once every required question on the current route
+// the protocol (Q1/Q2 = paywall, 2B, Q5 = insufficient or unable to open, ITR
+// recorded, no ITR found). It is shown only once every required question on the current route
 // is answered, and the paper's tick in the sidebar (_complete) always matches it.
 function updateCompletion() {
   if (!activePaperId) return;
@@ -1343,7 +1344,7 @@ function updateCompletion() {
   toggleSection('end_paywall_q1', done && isChecked('q1_paywall'));
   toggleSection('end_paywall_q2', done && isChecked('q2_paywall'));
   toggleSection('end_2b', done);
-  toggleSection('end_ci', done && isChecked('q5_ci'));
+  toggleSection('end_2a', done && (isChecked('q5_ci') || isChecked('q5_un')));
   toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
   toggleSection('end_itr', done);
   if (!!loadData(activePaperId)._complete !== done) {
@@ -1369,12 +1370,13 @@ function updateRouting() {
   toggleSection('sec2b_block', q2no || q1no);
 
   // Q5 sufficiency → potentially sufficient / unsure: Q7 languages + Section 3;
-  // unable to open: Section 3; unambiguously insufficient: Q6 (why), then end
+  // unable to open: Q7 languages, then end; unambiguously insufficient: Q6
+  // (why), then end
   const q5ps     = isChecked('q5_ps');
   const q5unsure = isChecked('q5_unsure');
   const q5un     = isChecked('q5_un');
-  toggleSection('q7_block', q5ps || q5unsure);
-  toggleSection('sec3_block', q5ps || q5unsure || q5un);
+  toggleSection('q7_block', q5ps || q5unsure || q5un);
+  toggleSection('sec3_block', q5ps || q5unsure);
 
   // Q — ITR in main paper → show 3C (no) or 3B (yes)
   const qItrMainYes = isChecked('q_itr_main_yes');
@@ -1871,42 +1873,56 @@ function buildForm(paperId) {
         <ul>
           <li>...answered Q5 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
           <li>...answered Q6 (Why is the code unambiguously insufficient?), if you indicated in Q5 that the code is unambiguously insufficient</li>
-          <li>...answered Q7 (In which programming language(s) is the simulation code written?), if you indicated in Q5 that the code is potentially sufficient or that you are unsure</li>
+          <li>...answered Q7 (In which programming language(s) is the simulation code written?), if you indicated in Q5 that the code is potentially sufficient, that you are unsure, or that you are unable to open the file(s)</li>
         </ul>
-        <p>In this section, we want to filter out articles for which the code that is shared is clearly not sufficient to reproduce <u>the simulations</u> in the article. We also want to know which programming language is used for the simulation code.</p>
-        <div class="callout yellow">
-          <span class="callout-label">⚠ Be Conservative</span>
-          Please be conservative in answering Q5. Any code that could potentially be used to reproduce (part of) the simulations in the paper should be indicated as potentially sufficient. Only in cases where the code is <u>clearly and unambiguously</u> insufficient to reproduce the simulations should you indicate the code as being insufficient.
-          <p style="margin-top:8px">Only select <strong>"I am unsure"</strong> if you see a reason to suspect that the shared code is not the simulation code, but you are not certain enough to indicate the code as unambiguously insufficient. As described below, this is not about whether the code is error-free, but only about whether the code that is shared is the simulation code. If you have no such reason, indicate the code as potentially sufficient.</p>
+        <p>In this section, we want to filter out papers for which the shared code is clearly not the code for <u>the simulations</u> in the paper. We also want to know which programming language is used for the simulation code.</p>
+        <div class="callout info">
+          <span class="callout-label">ℹ Key question</span>
+          Is the shared code the code that was (potentially) used to generate (part of) the results of the simulation(s) in the paper? This is <u>not</u> about whether the code is error-free or whether you are able to rerun it.
         </div>
-        <p>Take the following steps:</p>
+        <p>Take the following steps. This should not take more than a few minutes; you should not meticulously evaluate the code.</p>
         <ol type="1">
           <li>If a README or similar instruction is available, read through it to familiarize yourself with the context of the shared files.</li>
-          <li>Open any file containing code that you found in the previous steps that may be relevant to reproducing the simulations.
-            <ul>
-              <li>Files can often be inspected in online viewers in the repository where they are shared. You do not have to download the files.</li>
-              <li>If you cannot open or evaluate a relevant file due to its filetype (and an online viewer is not available), please indicate this in Q5. In this case, fill out the questions you can and continue to Section 3. A third coder will review the code for this paper.</li>
-            </ul>
-          <li>Scroll through the code files to see if there is any obvious indication that the file is irrelevant to reproduce the simulations in the paper.</li>
-        </ol>
-        <div class="callout info">
-          <span class="callout-label">ℹ Important!</span>
-          These steps should not take more than a few minutes. You should not meticulously evaluate the code. The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and belongs to the simulations reported in the paper, mark it as <u>potentially sufficient</u>, even if you notice errors that might prevent it from running.
+          <li>Open any file containing code that you found in the previous steps that may be relevant to the simulations. Files can often be inspected in online viewers in the repository where they are shared, which is enough. If no online viewer is available or it does not work, download the files to inspect them.</li>
+          <li>Scroll through the code files to see if there is any obvious indication that the code is not the simulation code.</li>
+          <li>Choose your answer to Q5 using the guide "How to choose your answer in Q5" below.</li>
+        </ol>`
+      )}
+
+      ${instr('How to choose your answer in Q5',
+        `<div class="callout green">
+          <span class="callout-label">✔ Potentially sufficient (the default)</span>
+          Select this if the code was potentially used to generate (part of) the results of the simulations in the paper, and you see no reason to suspect otherwise. Select it even if the code appears incomplete or you notice errors that might prevent (part of) the code from running. Examples:
+          <ul>
+            <li>A script that is partially commented out or appears incomplete, but still contains recognisable simulation logic (data-generating functions, loops over conditions, calls to statistical tests)</li>
+            <li>A collection of loosely organised files where at least one file plausibly contains simulation logic, even if the overall organisation is unclear</li>
+            <li>Code shared as text in a PDF or Word file rather than as a proper code file, but where the pasted code contains simulation logic</li>
+            <li>Code in a programming language you are unfamiliar with, in which you can still recognise simulation logic</li>
+          </ul>
         </div>
-        <p style="margin-top:10px"><strong>Examples (if you see no reason to suspect that the shared code is not the simulation code, evaluate the code as potentially sufficient):</strong></p>
-        <table>
-          <thead><tr><th style="width:72%">Situation</th><th>Decision</th></tr></thead>
-          <tbody>
-            <tr><td>A script in an unfamiliar language or with unclear structure, where you simply cannot tell whether it is sufficient or not</td><td class="decision-ps">Potentially sufficient</td></tr>
-            <tr><td>A script that is partially commented out or appears incomplete, but still contains recognisable simulation logic (data-generating functions, loops over conditions, calls to statistical tests)</td><td class="decision-ps">Potentially sufficient</td></tr>
-            <tr><td>A collection of loosely organised files where at least one file plausibly contains simulation logic, even if the overall organisation is unclear</td><td class="decision-ps">Potentially sufficient</td></tr>
-            <tr><td>Code shared as text in a PDF or Word file rather than as a proper code file, but where the pasted code contains simulation logic</td><td class="decision-ps">Potentially sufficient</td></tr>
-            <tr><td>Code for a completely different study or project that appears to have been shared by mistake</td><td class="decision-ci">Unambiguously insufficient</td></tr>
-            <tr><td>A README or plain text description of what the simulation does, with no actual runnable code</td><td class="decision-ci">Unambiguously insufficient</td></tr>
-            <tr><td>Code that exclusively relates to an empirical study in the same paper (e.g. processing survey data), with no simulation component whatsoever</td><td class="decision-ci">Unambiguously insufficient</td></tr>
-            <tr><td>Code for a package that is developed in the paper, but no code for applying the package to run the simulations in the paper</td><td class="decision-ci">Unambiguously insufficient</td></tr>
-          </tbody>
-        </table>`
+        <div class="callout warn">
+          <span class="callout-label">✖ Unambiguously insufficient</span>
+          Only select this if the code is <u>clearly and unambiguously</u> not the code for the simulations in the paper. You will indicate the reason in Q6. Examples:
+          <ul>
+            <li>Code for a package that is developed in the paper, but no code for applying the package to run the simulations in the paper</li>
+            <li>Code for a completely different study or project that appears to have been shared by mistake</li>
+            <li>Code that exclusively relates to an empirical study in the same paper (e.g., processing survey data), with no simulation component whatsoever</li>
+            <li>Example or dummy code that is not the code for the simulations in the paper</li>
+          </ul>
+        </div>
+        <div class="callout yellow">
+          <span class="callout-label">? I am unsure</span>
+          Only select this if:
+          <ul>
+            <li>you see a reason to suspect that the shared code is not the simulation code, but you are not certain enough to indicate the code as unambiguously insufficient; <strong>or</strong></li>
+            <li>the code is written in a programming language you are unfamiliar with, and you cannot interpret it well enough to judge whether it belongs to the simulations in the paper.</li>
+          </ul>
+          <p style="margin-top:6px">If neither applies, select potentially sufficient.</p>
+        </div>
+        <div class="callout grey">
+          <span class="callout-label">⊘ Unable to open file(s)</span>
+          Select this if you cannot open a relevant file, even after downloading it (e.g., because no software is available to open its file type). In this case, indicate the programming language in Q7 (based on the file extension, or select "Unclear") and continue to the next paper. A third coder will review the code for this paper.
+        </div>`
       )}
 
       ${qBlock('Q5', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
@@ -1926,7 +1942,6 @@ function buildForm(paperId) {
               ['q6_other_part',       'Code belongs to other part of the paper (e.g., empirical example)'],
               ['q6_example',          'Code is example/dummy code but is not the code to computationally reproduce the simulation(s)'],
               ['q6_different_study',  'Code belongs to a different study or project (e.g., shared by mistake)'],
-              ['q6_description_only', 'Only a description of the code or simulation is shared (e.g., README), not actual code'],
               ['q6_other',            'Other'],
             ].map(([key, text]) => `
               <label class="cb-option" id="opt_${key}">
@@ -1973,7 +1988,7 @@ function buildForm(paperId) {
         `<textarea class="notes-area" data-key="q7_notes" placeholder="Any additional observations about the code…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
-      ${condSection('end_ci', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
+      ${condSection('end_2a', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
 
     `)}
 
@@ -2009,7 +2024,7 @@ function buildForm(paperId) {
       ${condSection('end_2b', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
     `)}
 
-    <!-- �?�? SECTION 3 (conditional on Q5 = potentially sufficient, unsure or unable to open) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    <!-- �?�? SECTION 3 (conditional on Q5 = potentially sufficient or unsure) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
     ${condSection('sec3_block', `
       <hr class="section-divider">
       ${secHeader('Section 3', 'Identify Item To Reproduce (ITR)')}
