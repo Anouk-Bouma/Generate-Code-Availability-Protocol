@@ -1671,7 +1671,7 @@ function buildForm(paperId) {
       <p>You may answer Q1 when you have worked through all steps below, or as soon as the stopping criterion is met.</p>
       <div class="callout info">
         <span class="callout-label">ℹ Note</span>
-        You do not need to open or evaluate the content of any materials at this stage. You DO need to follow any links or descriptions to locate where materials are hosted. Do not focus solely on code yet. We first aim to identify if ANY supplementary materials are shared (code or other types).
+        You do not need to open or evaluate the content of any materials at this stage. You DO need to follow any links or descriptions to locate where materials are hosted. Do not focus solely on code yet. We first aim to identify if ANY supplementary materials are shared (code or other types). Code included in the paper PDF itself (e.g., in an appendix) also counts.
       </div>`
     )}
 
@@ -1699,18 +1699,38 @@ function buildForm(paperId) {
     ${instr('Step 1A.3) Manual fallback (only if no supplementary materials were found in Steps 1A.1 and 1A.2)',
       `<p>This step is only necessary if Steps 1A.1 and 1A.2 have not led to any supplementary materials, and the stopping criterion has not been reached. Please take the following step to make sure that no supplementary materials were missed:</p>
       <ol type="1">
-        <li>Open the paper (either on the journal website or by opening the PDF in the Links and Keywords Report) and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>.</li>
+        <li>Open the paper (either on the journal website or by opening the PDF in the Links and Keywords Report) and do an automatic search (<code>Ctrl+F</code> / <code>Cmd+F</code>) for the following keywords: <code>code</code>, <code>script</code>, <code>supplement</code>, <code>appendi</code>. If this shows that code is included in the paper itself (e.g., in an appendix), answer Q1 with "Yes".</li>
       </ol>`
     )}
 
+    ${instr('How to choose your answer in Q1',
+      `<div class="callout green">
+        <span class="callout-label">✔ Yes</span>
+        Select this if any supplementary materials (e.g., code, data, appendices) are available and you are able to access them. This includes materials that are behind a paywall but that you can access through your institution.
+      </div>
+      <div class="callout warn">
+        <span class="callout-label">✖ No</span>
+        Select this if no supplementary materials are shared, or if materials are mentioned but cannot be accessed, for example because:
+        <ul>
+          <li>the link is broken;</li>
+          <li>the location is empty;</li>
+          <li>materials are only available upon request;</li>
+          <li>materials are only available with restricted access.</li>
+        </ul>
+        <p style="margin-top:6px">You will indicate the reason in Q8.</p>
+      </div>
+      <div class="callout grey">
+        <span class="callout-label">⊘ I am unable to access the supplementary materials because of a journal paywall</span>
+        Select this if the supplementary materials are behind a journal paywall and you cannot access them yourself, also not through your institution. The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible materials: if your institution has access, please assess the materials.
+      </div>`
+    )}
+
     ${qBlock('Q1', 'Are any supplementary materials available?',
-      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately.</p>
-      <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if materials are mentioned but cannot be accessed (e.g., the link is broken, the location is empty, or materials are only available upon request or with restricted access). Materials on the journal website that you can access through your institution (e.g., behind a paywall) count as available.</p>
-      <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If you need to check the journal website for supplementary materials but cannot access the paper because of a journal paywall, select "I am unable to access this paper because of journal paywall". The paper will then be assessed by an additional coder. This option is not meant to record how many papers are openly accessible: if your institution has access to the paper, please assess the paper.</p>
+      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately. <strong>Exception:</strong> if the paper PDF itself contains code (e.g., in an appendix), also answer "Yes". You will then answer Q2 with "Yes" and select "In article PDF" as the location in Q4.</p>
       ${cbOptions('q1', [
         { text: 'Yes', value: 'yes' },
         { text: 'No', value: 'no' },
-        { text: 'I am unable to access this paper because of journal paywall', value: 'paywall' },
+        { text: 'I am unable to access the supplementary materials because of a journal paywall', value: 'paywall' },
       ])}`
     )}
 
@@ -1766,14 +1786,34 @@ function buildForm(paperId) {
         </ol>`
       )}
 
+      ${instr('How to choose your answer in Q2',
+        `<div class="callout green">
+          <span class="callout-label">✔ Yes</span>
+          Select this if any code is available and you are able to access it, even if the code seems insufficient or unrelated to the simulations (its relevance is evaluated in Q5). This includes code that is behind a paywall but that you can access through your institution.
+        </div>
+        <div class="callout warn">
+          <span class="callout-label">✖ No</span>
+          Select this if no code is shared, or if code is mentioned but cannot be accessed, for example because:
+          <ul>
+            <li>the link is broken;</li>
+            <li>the repository is empty or contains no code;</li>
+            <li>code is only available upon request;</li>
+            <li>code is only available with restricted access.</li>
+          </ul>
+          <p style="margin-top:6px">You will indicate the reason in Q8.</p>
+        </div>
+        <div class="callout grey">
+          <span class="callout-label">⊘ I am unable to access the code because of a journal paywall</span>
+          Select this if the code is behind a journal paywall and you cannot access it yourself, also not through your institution. The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible code: if your institution has access, please assess the code.
+        </div>`
+      )}
+
       ${qBlock('Q2', 'Is any code available?',
-        `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Answer "No" if code is mentioned but cannot be accessed (e.g., the link is broken, the repository is empty or contains no code, or code is only available upon request or with restricted access). You can indicate the reason in the next question. Code on the journal website that you can access through your institution (e.g., behind a paywall) counts as available.</p>
-        <p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If you need to check the journal website for code but cannot access the paper because of a journal paywall, select "I am unable to access this paper because of journal paywall". The paper will then be assessed by an additional coder. This option is not meant to record how many papers are openly accessible: if your institution has access to the paper, please assess the paper.</p>
-        ${cbOptions('q2', [
+        cbOptions('q2', [
           { text: 'Yes', value: 'yes' },
           { text: 'No', value: 'no' },
-          { text: 'I am unable to access this paper because of journal paywall', value: 'paywall' },
-        ])}`
+          { text: 'I am unable to access the code because of a journal paywall', value: 'paywall' },
+        ])
       )}
 
       ${condSection('end_paywall_q2', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
