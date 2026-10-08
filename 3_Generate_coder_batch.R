@@ -28,27 +28,29 @@ source("R/batch_json.R")
 
 project_root <- getwd()
 
-# ── Edit these per batch ─────────────────────────────────────────────────────
+# ── Settings ─────────────────────────────────────────────────────────────────
+# Settings come from GENERATE_BATCH.R when this script is run from there; the
+# values below are only used when you run this script on its own.
 
-coder_id  <- "coder01"
+cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", envir = globalenv()) else list()
+
+coder_id  <- cfg$coder_id %||% "coder01"
 
 # Papers to include: an explicit ID vector. Use sprintf() for a contiguous
 # range, or list specific IDs directly.
-batch_ids <- sprintf("P%03d", 1:100)
+batch_ids <- cfg$batch_ids %||% sprintf("P%03d", 1:15)
 # batch_ids <- c("P003", "P017", "P204")
 
-pdf_path <- "Articles All Records/files"  # real (nested) PDF corpus — the one
-                                           # thing here that's actually
-                                           # machine/setup-dependent
+pdf_path    <- cfg$pdf_folder  %||% "Pilot3/files"                 # PDFs (incl. subfolders)
+data_file   <- cfg$data_file   %||% "auto_report_input_data.rds"   # script 2's merged output
+batches_dir <- cfg$batches_dir %||% "Batches"
 
 # ── Internal wiring — shouldn't normally need to change ─────────────────────
 # All fixed names coming from, or feeding into, the rest of the pipeline.
 
-data_file   <- "auto_report_input_data.rds"          # script 2's merged output
 report_qmd  <- "R/report_template.qmd"
 index_file  <- "index.html"
 instructions_file <- "Protocol_instructions.docx"    # printable instructions
-batches_dir <- "Batches"
 
 # ── Load and filter ──────────────────────────────────────────────────────────
 
@@ -94,7 +96,9 @@ message("Copied ", nrow(batch) - length(missing_pdfs), " of ", nrow(batch), " PD
 # batch_ids and pdf_link_dir are passed as Quarto params (see the template's
 # YAML) so the report is filtered to this batch and its PDF links point at
 # the flat pdfs/ folder above, instead of the template's default full-corpus
-# behavior. execute_dir is set explicitly to the project root because
+# behavior. pdf_path and data_file are passed too, so the report looks for the
+# PDFs (to decide whether to show an "Open PDF" link) and the data in the same
+# places as this script. execute_dir is set explicitly to the project root because
 # report_qmd now lives in R/ — without it, the template's own relative paths
 # (data_file, pdf_path) would resolve relative to R/ instead and fail.
 #
@@ -108,7 +112,8 @@ quarto_render(
   input = report_qmd,
   output_file = tmp_report,
   execute_dir = project_root,
-  execute_params = list(batch_ids = batch$ID, pdf_link_dir = "pdfs")
+  execute_params = list(batch_ids = batch$ID, pdf_link_dir = "pdfs",
+                        pdf_path = pdf_path, data_file = data_file)
 )
 rendered_path <- file.path(dirname(report_qmd), tmp_report)
 file.copy(rendered_path, file.path(out_dir, "support_file.html"), overwrite = TRUE)
@@ -158,11 +163,13 @@ if (is.na(zip_exe)) {
   zip_path <- NA_character_
 } else {
   old_wd <- setwd(batches_dir)
-  on.exit(setwd(old_wd), add = TRUE)
-  zip_status <- system2(zip_exe, args = c("-r", "-q",
-    shQuote(paste0(folder_name, ".zip"), type = "cmd"),
-    shQuote(folder_name, type = "cmd")))
-  setwd(old_wd)
+  # tryCatch/finally instead of on.exit(): this script is also source()d from
+  # GENERATE_BATCH.R, where a top-level on.exit() doesn't restore the folder
+  zip_status <- tryCatch(
+    system2(zip_exe, args = c("-r", "-q",
+      shQuote(paste0(folder_name, ".zip"), type = "cmd"),
+      shQuote(folder_name, type = "cmd"))),
+    finally = setwd(old_wd))
   if (zip_status != 0) {
     warning("zip exited with status ", zip_status, " — check the folder at ", out_dir, " directly.")
     zip_path <- NA_character_

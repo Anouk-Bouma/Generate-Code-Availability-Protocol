@@ -15,6 +15,8 @@ execute:
 params:
   batch_ids: null
   pdf_link_dir: null
+  pdf_path: null
+  data_file: null
 ---
 
 ```{r setup}
@@ -23,13 +25,10 @@ library(dplyr)
 library(stringr)
 library(purrr)
 
-# Variables to change
-
-# Data file: update this path to match your batch file
-data_file <- "auto_report_input_data.rds"
-
-# Path to pdf files
-pdf_path <- "Articles All Records/files"
+# Data file and PDF folder are passed in by 3_Generate_coder_batch.R (params);
+# the values after %||% are only used when this file is rendered by hand.
+data_file <- params$data_file %||% "auto_report_input_data.rds"
+pdf_path  <- params$pdf_path  %||% "Pilot3/files"
 
 # Escape hatch only — you should never actually need to touch this. This
 # template is always invoked by 3_Generate_coder_batch.R, which passes

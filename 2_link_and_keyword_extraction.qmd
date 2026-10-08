@@ -17,24 +17,25 @@ library(bib2df)
 
 ## Configuration
 
-A few settings, so you can point the script at different input/output files without touching the logic below.
+Settings come from `GENERATE_BATCH.R` when this script is run from there; the values below are only used when you run this script on its own.
 
 ```{r}
+cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", envir = globalenv()) else list()
+
 # BibTeX metadata file exported from Zotero
-bib_file <- "Pilot3.bib"
+bib_file <- cfg$bib_file %||% "Pilot3.bib"
 
 # Folder containing GROBID TEI-XML files for the pilot articles
-xml_folder <- "Pilot3"
+xml_folder <- cfg$xml_folder %||% "Pilot3"
 
 # Output RDS file with all results of this script. It is read by
-# 3_Generate_coder_batch.R and R/report_template.qmd; if you rename it, change
-# the file name there too (data_file).
-output_file <- "auto_report_input_data.rds"
+# 3_Generate_coder_batch.R (data_file), which passes it on to R/report_template.qmd.
+output_file <- cfg$data_file %||% "auto_report_input_data.rds"
 
 # Only keep the papers marked as included in an inclusion file? Set to FALSE
 # to keep every paper in the BibTeX file (that has a DOI).
-use_inclusion_file <- FALSE
-inclusion_file     <- "all_articles.rds"  # needs columns doi_no_slash and included
+use_inclusion_file <- cfg$use_inclusion_file %||% FALSE
+inclusion_file     <- cfg$inclusion_file %||% "all_articles.rds"  # needs columns doi_no_slash and included
 ```
 
 ## Read metadata from BibTeX

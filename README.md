@@ -2,7 +2,7 @@
 
 This repository contains the scripts that turn a set of papers (PDFs + metadata) into a **coder batch**: a single self-contained folder a reviewer opens to code each paper against the Code Availability Protocol.
 
-You supply three inputs: your PDFs, a BibTeX export, and your screening decisions. Then, you run three scripts in order. The output is one `Batches/<coder_id>_<firstID>-<lastID>/` folder (plus a `.zip`) per coder.
+You supply your inputs (PDFs, a BibTeX export and, optionally, your screening decisions), set the settings in **`GENERATE_BATCH.R`** and run that one script. It runs the three step scripts in order. The output is one `Batches/<coder_id>_<firstID>-<lastID>/` folder (plus a `.zip`) per coder.
 
 ------------------------------------------------------------------------
 
@@ -10,6 +10,7 @@ You supply three inputs: your PDFs, a BibTeX export, and your screening decision
 
 ```         
 Generate-Code-Availability-Protocol/
+├── GENERATE_BATCH.R                    # The script you run: all settings in one place; runs steps 1-3
 ├── 1_pdf_to_XML.qmd                    # Step 1: convert your PDFs to TEI-XML via GROBID
 ├── 2_link_and_keyword_extraction.qmd   # Step 2: parse XML + BibTeX, extract links/keywords, merge into one dataset
 ├── 3_Generate_coder_batch.R            # Step 3: package PDFs + report + JSON into one folder per coder batch and generate a .zip file
@@ -105,43 +106,45 @@ A paper makes it into the pipeline only if it appears in **all three**: a DOI in
 
 ------------------------------------------------------------------------
 
+## Generating a batch (`GENERATE_BATCH.R`)
+
+Open the `.Rproj` in RStudio, open `GENERATE_BATCH.R`, change the settings at the top and click **Source**. All settings that can differ between batches are in this file; the step scripts below take their settings from it, so you don't need to edit them.
+
+| Setting | Meaning |
+|---|---|
+| `pdf_folder` | folder with the PDFs (subfolders are searched too), e.g. `"Pilot3/files"` |
+| `xml_folder` | folder for the XML files: step 1 writes them, step 2 reads them |
+| `bib_file` | BibTeX export with the papers' metadata |
+| `use_inclusion_file`, `inclusion_file` | `TRUE`: only keep papers marked `included` in the inclusion file; `FALSE`: keep every paper in the `.bib` that has a DOI |
+| `coder_ids` | one batch is made per coder, all with the same papers, e.g. `c("CoderAB", "CoderLV")` |
+| `batch_ids` | the papers in the batch, e.g. `sprintf("P%03d", 1:15)` or `c("P003", "P017")` |
+| `run_pdf_to_xml` | run step 1 (only converts PDFs that don't have an XML yet) |
+| `run_extraction` | run step 2 (rebuilds the data file and the paper IDs; see *About IDs* below) |
+| `grobid_url`, `data_file`, `batches_dir` | advanced: GROBID server, data file between steps 2 and 3, output folder |
+
+Each step script can still be run on its own; it then uses the default values in its own settings section.
+
+------------------------------------------------------------------------
+
 ## Step 1 — Convert PDFs to TEI-XML (`1_pdf_to_XML.qmd`)
 
-Open the file and run the chunks (or **Render**).
+Run from `GENERATE_BATCH.R` (`run_pdf_to_xml <- TRUE`), with the settings `pdf_folder`, `xml_folder` and `grobid_url`.
 
 -   Attaches `metacheck` (already installed by `renv::restore()` — see [R packages](#r-packages)) and calls its `convert()` function.
--   Scans `Articles All Records/files/` recursively for `*.pdf`.
--   Sends them to a GROBID server and writes one `<name>.pdf.tei.xml` (plus a `.json` sidecar) into `Articles All Records/`.
+-   Scans `pdf_folder` recursively for `*.pdf`, and skips PDFs that already have an XML in `xml_folder`.
+-   Sends the others to a GROBID server and writes one `<name>.xml` (plus a `.json` sidecar) into `xml_folder`.
 
-``` r
-paper_testbatch <- convert(
-  file_path = pdf_files,
-  save_path = "Articles All Records",
-  method    = "grobid",
-  api_url   = "https://grobid.hti.ieis.tue.nl",  # see note below
-  crossref_lookup = FALSE
-)
-```
+**If the GROBID server is down**, pick another active one from <https://www.scienceverse.org/metacheck/convert.json> and change `grobid_url` in `GENERATE_BATCH.R`.
 
-**If the GROBID server is down**, pick another active one from <https://www.scienceverse.org/metacheck/convert.json> and update `api_url`.
+**Incremental runs:** only PDFs without an XML are converted, so re-running is quick when nothing is new. To convert a PDF again, delete its XML first.
 
-**Incremental runs:** re-running processes every PDF it finds again. To convert only new papers, point `pdf_files` at just those PDFs, or move already-converted ones aside first.
-
-**Check:** you should end up with roughly one `.xml` per PDF in `Articles All Records/`.
+**Check:** the console shows how many PDFs were found, already converted and converted now; you should end up with one `.xml` per PDF in `xml_folder`.
 
 ------------------------------------------------------------------------
 
 ## Step 2 — Parse, extract, merge (`2_link_and_keyword_extraction.qmd`)
 
-Open and render. The only settings are in the **Configuration** chunk:
-
-``` r
-bib_file           <- "all_articles_metadata.bib"
-xml_folder         <- "Articles All Records"
-output_file        <- "auto_report_input_data.rds"
-use_inclusion_file <- TRUE                # FALSE: keep every paper in the .bib (that has a DOI)
-inclusion_file     <- "all_articles.rds"  # only used when use_inclusion_file is TRUE
-```
+Run from `GENERATE_BATCH.R` (`run_extraction <- TRUE`), with the settings `bib_file`, `xml_folder`, `use_inclusion_file`, `inclusion_file` and `data_file`.
 
 What it does:
 
@@ -165,20 +168,7 @@ What it does:
 
 ## Step 3 — Package a coder batch (`3_Generate_coder_batch.R`)
 
-This is a plain `.R` script, not a notebook. Run it with the working directory at the project root (`source("3_Generate_coder_batch.R")` from the RStudio project, or `Rscript 3_Generate_coder_batch.R`).
-
-### Edit these three lines per batch
-
-``` r
-coder_id  <- "coder01"                     # goes in the folder name + pre-fills the app's Coder ID field
-
-batch_ids <- sprintf("P%03d", 1:100)       # a contiguous range …
-# batch_ids <- c("P003", "P017", "P204")   # … or an explicit list
-
-pdf_path  <- "Articles All Records/files"  # your real (nested) PDF corpus
-```
-
-Everything below that line (`data_file`, `report_qmd`, `index_file`, `batches_dir`) is fixed wiring — leave it alone.
+Run from `GENERATE_BATCH.R`, once per coder in `coder_ids`, with the settings `batch_ids`, `pdf_folder`, `data_file` and `batches_dir`. The coder ID goes in the folder name and pre-fills the app's Coder ID field. The PDF folder and data file are also passed on to `R/report_template.qmd`, so the report finds the PDFs and shows an "Open PDF" link for each paper.
 
 ### What it produces
 
@@ -221,17 +211,14 @@ Send the `.zip` (or the folder). The coder:
 # 0. Open the .Rproj in RStudio (sets working dir to project root), then:
 renv::restore()                       # install the locked package versions
 
-# 1. PDFs in place under "Articles All Records/files/", named <doi_no_slash>.pdf
-#    all_articles_metadata.bib and all_articles.rds in the project root
+# 1. PDFs in place in the PDF folder, named <doi_no_slash>.pdf;
+#    the .bib (and inclusion file, if used) in the project root
 
-# 2. Render 1_pdf_to_XML.qmd            -> writes <doi_no_slash>.xml files
-# 3. Render 2_link_and_keyword_extraction.qmd  -> writes auto_report_input_data.rds
+# 2. Change the settings at the top of GENERATE_BATCH.R, then:
+source("GENERATE_BATCH.R")
+#    -> runs steps 1-3; one Batches/<coder_id>_<firstID>-<lastID>/ (+ .zip) per coder
 
-# 4. Edit coder_id / batch_ids / pdf_path in 3_Generate_coder_batch.R, then:
-source("3_Generate_coder_batch.R")
-#    -> Batches/<coder_id>_<firstID>-<lastID>/  (+ .zip)
-
-# 5. Send the .zip to the coder.
+# 3. Send the .zip to the coder.
 ```
 
 ------------------------------------------------------------------------

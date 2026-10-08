@@ -13,22 +13,50 @@ renv::restore()
 library(metacheck)
 ```
 
+## Configuration
+
+Settings come from `GENERATE_BATCH.R` when this script is run from there; the values below are only used when you run this script on its own.
+
+```{r}
+cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", envir = globalenv()) else list()
+
+# Folder with the PDFs (searched including subfolders)
+pdf_folder <- cfg$pdf_folder %||% "Pilot3/files"
+
+# Folder the XML files are written to (read by script 2)
+xml_folder <- cfg$xml_folder %||% "Pilot3"
+
+# GROBID server. If it is not active, take another one from the list of active
+# servers: https://www.scienceverse.org/metacheck/convert.json
+grobid_url <- cfg$grobid_url %||% "https://grobid.hti.ieis.tue.nl"
+```
+
 ## Process batch to XML files
+
+Only PDFs that do not have an XML file in `xml_folder` yet are converted, so re-running does not send every PDF to the GROBID server again. To convert a PDF again, delete its XML file first.
 
 ```{r}
 
 #Listing all the filepaths at which the pdf's are stored
 pdf_files <- list.files(
-  path = "Articles All Records/files",
+  path = pdf_folder,
   pattern = "\\.pdf$",
   recursive = TRUE,
   full.names = TRUE
 )
 
+# Skip PDFs that were already converted (<name>.pdf -> <name>.xml)
+done <- file.exists(file.path(xml_folder, paste0(tools::file_path_sans_ext(basename(pdf_files)), ".xml")))
+message(length(pdf_files), " PDFs found in ", pdf_folder, "; ", sum(done),
+        " already converted, ", sum(!done), " to convert")
+pdf_files <- pdf_files[!done]
+
 # Processing the batch of files to XML files
-paper_testbatch <- convert(file_path = pdf_files,
-                           save_path = "Articles All Records",
-                           method = "grobid",
-                           api_url = "https://grobid.hti.ieis.tue.nl", #if the server is not active take another one from list of active servers: https://www.scienceverse.org/metacheck/convert.json
-                           crossref_lookup = FALSE)
+if (length(pdf_files) > 0) {
+  paper_testbatch <- convert(file_path = pdf_files,
+                             save_path = xml_folder,
+                             method = "grobid",
+                             api_url = grobid_url,
+                             crossref_lookup = FALSE)
+}
 ```
