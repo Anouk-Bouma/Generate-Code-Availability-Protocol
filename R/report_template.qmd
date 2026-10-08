@@ -25,13 +25,13 @@ library(dplyr)
 library(stringr)
 library(purrr)
 
-# Data file and PDF folder are passed in by 3_Generate_coder_batch.R (params);
+# Data file and PDF folder are passed in by pipeline/3_Batch_Generation.R (params);
 # the values after %||% are only used when this file is rendered by hand.
 data_file <- params$data_file %||% "auto_report_input_data.rds"
 pdf_path  <- params$pdf_path  %||% "Pilot3/files"
 
 # Escape hatch only — you should never actually need to touch this. This
-# template is always invoked by 3_Generate_coder_batch.R, which passes
+# template is always invoked by pipeline/3_Batch_Generation.R, which passes
 # params$batch_ids (the exact, possibly non-contiguous ID list for a coder's
 # batch) and overrides batch_articles below entirely. It exists purely so
 # this file can still be opened and rendered by hand for a quick debug
@@ -43,7 +43,7 @@ batch_articles <- c(1, 100)
 include_batch <- if (!is.null(params$batch_ids)) {
   params$batch_ids
 } else {
-  # IDs are generated in script 2 as P001, P002, ... — this fills in the
+  # IDs are generated in step 2 as P001, P002, ... — this fills in the
   # numbers and expands them to the matching zero-padded ID range automatically.
   sprintf("P%03d", batch_articles[1]:batch_articles[2])
 }
@@ -168,7 +168,7 @@ for (i in seq_len(nrow(articles))) {
               article$`DOI Link`, article$`DOI Link`))
   # Existence is always checked against the real corpus (pdf_path); the href
   # written into the report points there too UNLESS pdf_link_dir is set (by
-  # 3_Generate_coder_batch.R), in which case it points at a flat pdfs/<doi>.pdf
+  # pipeline/3_Batch_Generation.R), in which case it points at a flat pdfs/<doi>.pdf
   # path instead, matching where that script copies the batch's PDFs to.
   pdf_src <- pdf_lookup[article$doi_no_slash]
   if (!is.na(pdf_src)) {

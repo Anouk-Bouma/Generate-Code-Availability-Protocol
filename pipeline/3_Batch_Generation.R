@@ -1,24 +1,22 @@
-# 3_Generate_coder_batch.R
+# pipeline/3_Batch_Generation.R
 #
-# Assembles everything a coder needs for one batch of papers into a single
-# self-contained folder (and a matching .zip): only the PDFs for that batch,
-# the filtered links-and-keywords report, index.html, the printable protocol
-# instructions (Protocol_instructions.docx), and the papers_batch.json to upload
-# there.
+# DO NOT RUN THIS SCRIPT YOURSELF: it is run by GENERATE_BATCH.R in the project
+# folder (once per coder), which also holds all its settings.
 #
-# This is step 3 of the pipeline you actually run, in order:
-#   1_pdf_to_XML.qmd, 2_link_and_keyword_extraction.qmd, then this script.
-# R/report_template.qmd is NOT a step you run yourself — it's an internal
-# template this script renders on your behalf (see the "Render" section
-# below), which is why it isn't numbered alongside 1/2/3.
+# Step 3 of the pipeline. Assembles everything a coder needs for one batch of
+# papers into a single self-contained folder (and a matching .zip): only the
+# PDFs for that batch, the filtered links-and-keywords report, index.html, the
+# printable protocol instructions (Protocol_instructions.docx), and the
+# papers_batch.json to upload there.
 #
-# Does NOT re-run script 1 (GROBID XML generation) or the bib-parsing / XML-
-# parsing / keyword-extraction part of script 2 — those are assumed already
-# done. This script only reads the already-merged auto_report_input_data.rds
-# and packages a filtered subset of it.
+# Steps 1 and 2 (pipeline/1_pdf_to_XML.qmd, pipeline/2_link_and_keyword_
+# extraction.qmd) must have run before; this script only reads their merged
+# output (auto_report_input_data.rds) and packages a filtered subset of it.
+# R/report_template.qmd is an internal template this script renders (see the
+# "Render" section below).
 #
-# Run with the working directory set to the project root (same assumption as
-# scripts 1-2).
+# All paths are relative to the project folder: GENERATE_BATCH.R runs this
+# script with the project folder as working directory.
 
 library(dplyr)
 library(jsonlite)
@@ -29,8 +27,8 @@ source("R/batch_json.R")
 project_root <- getwd()
 
 # ── Settings ─────────────────────────────────────────────────────────────────
-# Settings come from GENERATE_BATCH.R when this script is run from there; the
-# values below are only used when you run this script on its own.
+# Settings come from GENERATE_BATCH.R. The values after %||% are only fallbacks
+# for when this script is run on its own, which is not needed.
 
 cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", envir = globalenv()) else list()
 
@@ -42,7 +40,7 @@ batch_ids <- cfg$batch_ids %||% sprintf("P%03d", 1:15)
 # batch_ids <- c("P003", "P017", "P204")
 
 pdf_path    <- cfg$pdf_folder  %||% "Pilot3/files"                 # PDFs (incl. subfolders)
-data_file   <- cfg$data_file   %||% "auto_report_input_data.rds"   # script 2's merged output
+data_file   <- cfg$data_file   %||% "auto_report_input_data.rds"   # step 2's merged output
 batches_dir <- cfg$batches_dir %||% "Batches"
 
 # ── Internal wiring — shouldn't normally need to change ─────────────────────

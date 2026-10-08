@@ -7,8 +7,7 @@
 # for each paper; without it, a coder gets an empty metadata block to fill in
 # by hand.
 #
-# Sourced by both 2_link_and_keyword_extraction.qmd's export chunk and
-# 3_Generate_coder_batch.R, so the two never drift apart.
+# Sourced by pipeline/3_Batch_Generation.R.
 
 # "Last, First; Last, First" from one paper's author vector.
 format_authors_string <- function(authors) {

@@ -4,6 +4,10 @@ format: html
 editor: visual
 ---
 
+> **Do not run this script yourself.** It is run by `GENERATE_BATCH.R` in the project folder, which also holds all its settings. Paths below are relative to the project folder.
+
+Step 1 of the pipeline: converts the PDFs to TEI-XML via GROBID.
+
 ## Dependency Management
 
 ```{r}
@@ -15,7 +19,7 @@ library(metacheck)
 
 ## Configuration
 
-Settings come from `GENERATE_BATCH.R` when this script is run from there; the values below are only used when you run this script on its own.
+Settings come from `GENERATE_BATCH.R`. The values after `%||%` are only fallbacks for when this script is run on its own, which is not needed.
 
 ```{r}
 cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", envir = globalenv()) else list()
@@ -23,7 +27,7 @@ cfg <- if (exists("batch_settings", envir = globalenv())) get("batch_settings", 
 # Folder with the PDFs (searched including subfolders)
 pdf_folder <- cfg$pdf_folder %||% "Pilot3/files"
 
-# Folder the XML files are written to (read by script 2)
+# Folder the XML files are written to (read by step 2)
 xml_folder <- cfg$xml_folder %||% "Pilot3"
 
 # GROBID server. If it is not active, take another one from the list of active

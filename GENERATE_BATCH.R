@@ -1,20 +1,22 @@
 # GENERATE_BATCH.R
 #
-# The one script to run to generate coder batches. Change the settings below,
-# then run the whole script (in RStudio: open the .Rproj, then click "Source").
+# THIS IS THE ONLY SCRIPT YOU RUN to generate coder batches. Change the
+# settings below, then run the whole script (in RStudio: open the .Rproj, then
+# click "Source").
 #
-# It runs the pipeline steps in order, each with the settings from this file:
-#   1. 1_pdf_to_XML.qmd                   PDFs -> TEI-XML via GROBID (only PDFs
-#                                          that don't have an XML yet)
-#   2. 2_link_and_keyword_extraction.qmd  XML + BibTeX -> one data file with
-#                                          paper IDs (P001, P002, ...), links and
-#                                          keyword matches
-#   3. 3_Generate_coder_batch.R           one folder + .zip per coder in
-#                                          batches_dir, with the PDFs, the Links
-#                                          and Keywords Report, index.html, the
-#                                          printable instructions and the batch
-#                                          JSON to upload
-# The other scripts don't need to be edited.
+# It runs the pipeline steps in the pipeline/ folder in order, each with the
+# settings from this file:
+#   1. pipeline/1_pdf_to_XML.qmd                   PDFs -> TEI-XML via GROBID
+#                                                   (only PDFs without an XML yet)
+#   2. pipeline/2_link_and_keyword_extraction.qmd  XML + BibTeX -> one data file
+#                                                   with paper IDs (P001, P002,
+#                                                   ...), links and keyword matches
+#   3. pipeline/3_Batch_Generation.R               one folder + .zip per coder in
+#                                                   batches_dir, with the PDFs, the
+#                                                   Links and Keywords Report,
+#                                                   index.html, the printable
+#                                                   instructions and the batch JSON
+# You don't need to open, edit or run the scripts in pipeline/ or R/.
 
 # ══ Settings ══════════════════════════════════════════════════════════════════
 
@@ -59,7 +61,7 @@ batches_dir <- "Batches"                         # where batch folders and .zip 
 # ══ Run ═══════════════════════════════════════════════════════════════════════
 # Nothing below needs editing.
 
-if (!file.exists("index.html") || !file.exists("3_Generate_coder_batch.R"))
+if (!file.exists("index.html") || !file.exists("pipeline/3_Batch_Generation.R"))
   stop("Run this script with the project folder as working directory ",
        "(open Generate-Code-Availability-Protocol.Rproj in RStudio first).")
 
@@ -86,11 +88,11 @@ batch_settings <- list(
 tryCatch({
   if (run_pdf_to_xml) {
     message("\n══ Step 1: PDF -> XML ══")
-    run_qmd("1_pdf_to_XML.qmd")
+    run_qmd("pipeline/1_pdf_to_XML.qmd")
   }
   if (run_extraction) {
     message("\n══ Step 2: links and keyword extraction ══")
-    run_qmd("2_link_and_keyword_extraction.qmd")
+    run_qmd("pipeline/2_link_and_keyword_extraction.qmd")
   }
   if (!file.exists(data_file))
     stop("Data file not found: ", data_file, " (run step 2 by setting run_extraction <- TRUE)")
@@ -98,7 +100,7 @@ tryCatch({
   for (coder in coder_ids) {
     message("\n══ Step 3: batch for ", coder, " ══")
     batch_settings$coder_id <- coder
-    source("3_Generate_coder_batch.R", local = new.env(parent = globalenv()), echo = FALSE)
+    source("pipeline/3_Batch_Generation.R", local = new.env(parent = globalenv()), echo = FALSE)
   }
   message("\nDone: ", length(coder_ids), " batch(es) in ", normalizePath(batches_dir))
 }, finally = rm(batch_settings, envir = globalenv()))
