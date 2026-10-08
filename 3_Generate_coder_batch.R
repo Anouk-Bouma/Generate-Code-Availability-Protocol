@@ -2,8 +2,9 @@
 #
 # Assembles everything a coder needs for one batch of papers into a single
 # self-contained folder (and a matching .zip): only the PDFs for that batch,
-# the filtered links-and-keywords report, index.html, and the papers_batch.json
-# to upload there.
+# the filtered links-and-keywords report, index.html, the printable protocol
+# instructions (Protocol_instructions.docx), and the papers_batch.json to upload
+# there.
 #
 # This is step 3 of the pipeline you actually run, in order:
 #   1_pdf_to_XML.qmd, 2_link_and_keyword_extraction.qmd, then this script.
@@ -46,6 +47,7 @@ pdf_path <- "Articles All Records/files"  # real (nested) PDF corpus — the one
 data_file   <- "auto_report_input_data.rds"          # script 2's merged output
 report_qmd  <- "R/report_template.qmd"
 index_file  <- "index.html"
+instructions_file <- "Protocol_instructions.docx"    # printable instructions
 batches_dir <- "Batches"
 
 # ── Load and filter ──────────────────────────────────────────────────────────
@@ -119,9 +121,17 @@ file.remove(rendered_path)
 
 write_batch_json(batch, file.path(out_dir, paste0("papers_batch_", coder_id, ".json")), coder_id = coder_id)
 
-# ── Copy index.html ──────────────────────────────────────────────────────────
+# ── Copy index.html and the printable instructions ──────────────────────────
 
 file.copy(index_file, file.path(out_dir, "index.html"), overwrite = TRUE)
+
+# Word version of the protocol instructions, for reading on a separate device or
+# on paper. Optional: the batch works without it, so only warn if it's missing.
+if (file.exists(instructions_file)) {
+  file.copy(instructions_file, file.path(out_dir, basename(instructions_file)), overwrite = TRUE)
+} else {
+  warning("Instructions file not found, not copied into the batch: ", instructions_file)
+}
 
 # ── Zip it up ─────────────────────────────────────────────────────────────────
 # Shells out to a zip executable rather than using the zip package's zip()/
