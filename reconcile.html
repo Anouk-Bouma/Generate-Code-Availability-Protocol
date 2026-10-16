@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reproducibility Protocol — Reconciliation</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --accent:       #1f4e79;
+  --accent-mid:   #2e75b6;
+  --accent-light: #bdd7ee;
+  --accent-pale:  #eef5fb;
+  --green-dark:   #375623;
+  --green-bg:     #e2efda;
+  --warn-dark:    #833c00;
+  --warn-bg:      #fce4d6;
+  --yellow-dark:  #5c3d00;
+  --yellow-bg:    #fff2cc;
+  --ink:          #1a1a1a;
+  --ink-mid:      #444;
+  --ink-muted:    #777;
+  --border:       #d0d0cc;
+  --bg-page:      #e8e5e0;
+  --bg-sidebar:   #1f4e79;
+  /* Tints that group coders who gave the same answer */
+  --grp-0: #dbe9f6; --grp-0-ink: #1f4e79;
+  --grp-1: #fbe3cf; --grp-1-ink: #833c00;
+  --grp-2: #e6dcf2; --grp-2-ink: #4b2a7a;
+  --grp-3: #d9efe9; --grp-3-ink: #1d5c4d;
+  --sans:         'Source Sans 3', system-ui, sans-serif;
+  --serif:        'Libre Baskerville', Georgia, serif;
+  --mono:         'JetBrains Mono', monospace;
+  --sidebar-w:    250px;
+}
+
+html, body { height: 100%; overflow: hidden; font-family: var(--sans); color: var(--ink); background: var(--bg-page); }
+
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w); background: var(--bg-sidebar);
+  display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+}
+#sidebar-header { padding: 18px 16px 14px; border-bottom: 1px solid rgba(255,255,255,0.12); }
+#sidebar-header .title { font-family: var(--serif); font-size: 12.5pt; font-weight: 700; color: #fff; line-height: 1.3; margin-bottom: 3px; }
+#sidebar-header .subtitle { font-size: 8pt; color: var(--accent-light); letter-spacing: 1px; text-transform: uppercase; }
+#overview-link {
+  margin: 10px 8px 4px; padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  color: rgba(255,255,255,0.85); font-size: 9pt; font-weight: 600;
+  background: rgba(255,255,255,0.08); border: none; text-align: left; font-family: var(--sans);
+}
+#overview-link:hover, #overview-link.active { background: rgba(255,255,255,0.18); color: #fff; }
+#filter-tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 8px 6px; }
+.filter-tab {
+  font-family: var(--sans); font-size: 7.5pt; font-weight: 600; letter-spacing: 0.3px;
+  padding: 4px 7px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.25);
+  background: transparent; color: rgba(255,255,255,0.75); cursor: pointer;
+}
+.filter-tab:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+.filter-tab.active { background: var(--accent-light); color: var(--accent); border-color: var(--accent-light); }
+.filter-tab .n { opacity: 0.75; margin-left: 2px; }
+#paper-list { flex: 1; overflow-y: auto; padding: 4px 8px 8px; }
+#paper-list::-webkit-scrollbar { width: 4px; }
+#paper-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+.paper-item {
+  display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 6px;
+  cursor: pointer; color: rgba(255,255,255,0.75); margin-bottom: 2px;
+}
+.paper-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.paper-item.active { background: rgba(255,255,255,0.18); color: #fff; font-weight: 600; }
+.paper-item .paper-label { flex: 1; min-width: 0; }
+.paper-item .paper-title-short { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 8.5pt; }
+.paper-item .paper-status { font-size: 7pt; color: rgba(255,255,255,0.5); margin-top: 1px; }
+.paper-item.active .paper-status { color: var(--accent-light); }
+.list-empty { color: rgba(255,255,255,0.5); font-size: 8.5pt; padding: 12px 10px; line-height: 1.5; }
+.sdot {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9pt; font-weight: 700; color: #fff; background: rgba(255,255,255,0.15);
+}
+.sdot.agreed   { background: #7bc67e; }
+.sdot.resolved { background: #4f9a52; }
+.sdot.open     { background: #e8a07a; }
+.sdot.third    { background: #c9a227; }
+.sdot.waiting  { background: rgba(255,255,255,0.2); }
+
+/* ── Main ────────────────────────────────────────────────────────── */
+#main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#topbar {
+  height: 56px; flex-shrink: 0; background: #fff; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; padding: 0 18px;
+}
+#topbar-title { flex: 1; font-family: var(--serif); font-size: 11pt; font-weight: 700; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#topbar-title span { font-family: var(--sans); font-weight: 600; font-size: 9pt; color: var(--ink-muted); margin-left: 6px; }
+#saved-indicator { font-size: 8.5pt; color: var(--green-dark); opacity: 0; transition: opacity 0.3s; }
+#saved-indicator.show { opacity: 1; }
+.top-btn {
+  font-family: var(--sans); font-size: 8.5pt; font-weight: 600; padding: 7px 12px;
+  border-radius: 5px; border: 1px solid var(--border); background: #f5f4f1; color: var(--ink-mid); cursor: pointer;
+}
+.top-btn:hover { background: #ebe9e4; }
+.top-btn.primary { background: var(--green-bg); color: var(--green-dark); border-color: #b9d8a4; }
+.top-btn.primary:hover { background: #c6e3b4; }
+
+#content-area { flex: 1; overflow-y: auto; padding: 24px 28px 60px; }
+.doc-card { max-width: 980px; margin: 0 auto; }
+
+h1.page-title { font-family: var(--serif); font-size: 17pt; color: var(--accent); margin-bottom: 6px; }
+.lead { font-size: 10.5pt; color: var(--ink-mid); line-height: 1.6; margin-bottom: 18px; max-width: 760px; }
+.panel { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+.panel h3 { font-family: var(--serif); font-size: 11pt; color: var(--accent); margin-bottom: 8px; }
+.panel p, .panel li { font-size: 9.5pt; color: var(--ink-mid); line-height: 1.6; }
+.panel ol, .panel ul { padding-left: 20px; margin: 4px 0 8px; }
+.muted { color: var(--ink-muted); }
+.small { font-size: 8.5pt; }
+code, .mono, pre { font-family: var(--mono); font-size: 8.5pt; font-variant-ligatures: none; }
+
+.upload-label {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  font-size: 9pt; font-weight: 600; padding: 8px 14px; border-radius: 5px;
+  background: var(--accent-pale); color: var(--accent); border: 1px solid var(--accent-light); margin: 6px 8px 6px 0;
+}
+.upload-label:hover { background: #e1eef9; }
+.upload-label input { display: none; }
+.btn {
+  font-family: var(--sans); font-size: 9pt; font-weight: 600; padding: 8px 14px; border-radius: 5px; cursor: pointer;
+  border: 1px solid var(--border); background: #f5f4f1; color: var(--ink-mid); margin: 6px 8px 6px 0;
+}
+.btn:hover { background: #ebe9e4; }
+.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn.primary:hover { background: var(--accent-mid); }
+.btn.danger { color: var(--warn-dark); }
+.btn.link { background: none; border: none; color: var(--accent-mid); padding: 2px 4px; margin: 0; font-size: 8.5pt; text-decoration: underline; }
+.text-in {
+  font-family: var(--sans); font-size: 9.5pt; padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px; width: 100%;
+}
+.text-in:focus { outline: none; border-color: var(--accent-mid); box-shadow: 0 0 0 2px var(--accent-pale); }
+textarea.text-in { resize: vertical; min-height: 54px; }
+
+table.data { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 8px; }
+table.data th { text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-muted); font-weight: 700; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+table.data td { padding: 7px 8px; border-bottom: 1px solid #eeece8; vertical-align: top; }
+
+.log { margin-top: 10px; font-size: 8.5pt; line-height: 1.6; }
+.log div { padding: 2px 0; }
+.log .ok { color: var(--green-dark); }
+.log .warn { color: var(--warn-dark); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 6px; }
+.stat {
+  border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px; cursor: pointer; background: #fbfaf8;
+}
+.stat:hover { border-color: var(--accent-mid); }
+.stat .num { font-family: var(--serif); font-size: 17pt; font-weight: 700; color: var(--accent); }
+.stat .lbl { font-size: 8.5pt; color: var(--ink-mid); font-weight: 600; }
+.stat .desc { font-size: 7.5pt; color: var(--ink-muted); margin-top: 2px; line-height: 1.4; }
+
+/* ── Paper view ──────────────────────────────────────────────────── */
+.paper-head { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 16px; }
+.paper-head .pid { font-size: 8pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 4px; }
+.paper-head h1 { font-family: var(--serif); font-size: 13pt; color: var(--accent); line-height: 1.4; margin-bottom: 4px; }
+.paper-head .authors { font-size: 9pt; color: var(--ink-mid); margin-bottom: 4px; }
+.paper-head a { font-size: 9pt; color: var(--accent-mid); }
+.coder-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.coder-chip { font-size: 8.5pt; padding: 5px 10px; border-radius: 14px; background: var(--accent-pale); color: var(--accent); border: 1px solid var(--accent-light); }
+.coder-chip.inactive { background: #f3f2ef; color: var(--ink-muted); border-color: var(--border); }
+.coder-chip.incomplete { background: var(--yellow-bg); color: var(--yellow-dark); border-color: #ecd68c; }
+.progress-line { margin-top: 12px; font-size: 9pt; color: var(--ink-mid); }
+
+.banner { border-radius: 6px; padding: 10px 14px; font-size: 9pt; line-height: 1.55; margin-top: 12px; }
+.banner.warn { background: var(--warn-bg); color: var(--warn-dark); }
+.banner.yellow { background: var(--yellow-bg); color: var(--yellow-dark); }
+.banner.green { background: var(--green-bg); color: var(--green-dark); }
+.banner.info { background: var(--accent-pale); color: var(--accent); }
+.banner label { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-weight: 600; cursor: pointer; }
+
+.section-header { display: flex; align-items: baseline; gap: 10px; margin: 22px 0 10px; }
+.section-header .sec-label { font-size: 7.5pt; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: #fff; background: var(--accent); padding: 3px 8px; border-radius: 3px; }
+.section-header h2 { font-family: var(--serif); font-size: 11pt; color: var(--accent); }
+
+.item-card { background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 7px; margin-bottom: 10px; }
+.item-card.disagree, .item-card.single, .item-card.none { border-left-color: #e8a07a; }
+.item-card.stale { border-left-color: #c9a227; }
+.item-card.resolved { border-left-color: #4f9a52; }
+.item-card.agree { border-left-color: #7bc67e; }
+.item-card.na, .item-card.pending { background: #f7f6f3; }
+.item-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.q-tag { font-size: 8pt; font-weight: 700; color: var(--accent); background: var(--accent-pale); border: 1px solid var(--accent-light); padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.q-text { flex: 1; font-size: 9.5pt; font-weight: 600; color: var(--ink); line-height: 1.4; }
+.item-card.na .q-text, .item-card.pending .q-text { color: var(--ink-muted); font-weight: 500; }
+.chip { font-size: 7.5pt; font-weight: 700; letter-spacing: 0.4px; text-transform: uppercase; padding: 3px 8px; border-radius: 10px; white-space: nowrap; }
+.chip.agree { background: var(--green-bg); color: var(--green-dark); }
+.chip.disagree, .chip.single, .chip.none { background: var(--warn-bg); color: var(--warn-dark); }
+.chip.resolved { background: #4f9a52; color: #fff; }
+.chip.stale { background: var(--yellow-bg); color: var(--yellow-dark); }
+.chip.na, .chip.pending { background: #ebe9e4; color: var(--ink-muted); }
+.item-body { padding: 0 14px 12px; }
+.item-card.na .item-body, .item-card.pending .item-body { padding-bottom: 10px; }
+
+table.answers { width: 100%; border-collapse: separate; border-spacing: 0 4px; font-size: 9pt; }
+table.answers th { width: 130px; text-align: left; font-weight: 600; color: var(--ink-mid); padding: 6px 8px; vertical-align: top; white-space: nowrap; }
+table.answers td { padding: 6px 10px; border-radius: 5px; vertical-align: top; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+table.answers td.none { color: var(--ink-muted); font-style: italic; background: #f3f2ef; }
+.grp-0 { background: var(--grp-0); color: var(--grp-0-ink); }
+.grp-1 { background: var(--grp-1); color: var(--grp-1-ink); }
+.grp-2 { background: var(--grp-2); color: var(--grp-2-ink); }
+.grp-3 { background: var(--grp-3); color: var(--grp-3-ink); }
+.ctx { font-size: 8.5pt; color: var(--ink-mid); margin-top: 3px; white-space: pre-wrap; }
+.ctx b { font-weight: 600; color: var(--ink-muted); }
+.agree-val { font-size: 9pt; font-weight: 600; color: var(--green-dark); max-width: 40%; text-align: right; white-space: pre-wrap; word-break: break-word; }
+.item-card.agree .item-head { padding: 7px 14px; }
+.item-card.agree .item-body { padding: 0 14px 8px; }
+
+.decision { margin-top: 10px; padding: 12px; border-radius: 6px; background: #fbfaf8; border: 1px dashed var(--border); }
+.decision-title { font-size: 7.5pt; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-muted); margin-bottom: 8px; }
+.opt-grid { display: flex; flex-direction: column; gap: 5px; }
+.opt-grid.cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+.opt {
+  display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+  font-family: var(--sans); font-size: 9pt; color: var(--ink); padding: 7px 10px; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 5px; background: #fff;
+}
+.opt:hover { border-color: var(--accent-mid); }
+.opt.selected { background: var(--green-bg); border-color: #8fc078; font-weight: 600; }
+.opt .box { width: 15px; height: 15px; border: 1.5px solid #999; border-radius: 3px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
+.opt.radio .box { border-radius: 50%; }
+.opt.selected .box { background: var(--green-dark); border-color: var(--green-dark); }
+.opt .txt { flex: 1; }
+.badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.badge { font-size: 7.5pt; font-weight: 700; padding: 2px 6px; border-radius: 8px; white-space: nowrap; }
+.use-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.use-btn { font-family: var(--sans); font-size: 8pt; font-weight: 600; padding: 4px 9px; border-radius: 12px; border: 1px solid var(--accent-light); background: var(--accent-pale); color: var(--accent); cursor: pointer; }
+.use-btn:hover { background: #e1eef9; }
+.note-row { margin-top: 8px; }
+.note-row label, .field-label { font-size: 7.5pt; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; color: var(--ink-muted); display: block; margin-bottom: 4px; }
+.decided-line { margin-top: 8px; font-size: 8.5pt; color: var(--green-dark); }
+.decided-line .btn.link { margin-left: 6px; }
+
+.shots { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 8px; }
+.shot { flex: 1 1 260px; max-width: 460px; }
+.shot .who { font-size: 8pt; font-weight: 700; color: var(--ink-mid); margin-bottom: 4px; }
+.shot img { width: 100%; border: 1px solid var(--border); border-radius: 5px; cursor: zoom-in; display: block; }
+
+.notes-block { background: #fff; border: 1px solid var(--border); border-radius: 7px; padding: 12px 14px; margin-top: 10px; }
+.next-row { display: flex; gap: 10px; align-items: center; margin-top: 18px; }
+
+/* ── Modal ───────────────────────────────────────────────────────── */
+#modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 50; align-items: center; justify-content: center; padding: 16px; }
+#modal-overlay.open { display: flex; }
+#modal { background: #fff; border-radius: 10px; padding: 22px 24px; width: 640px; max-width: 100%; max-height: 85vh; overflow-y: auto; }
+#modal h3 { font-family: var(--serif); color: var(--accent); font-size: 12pt; margin-bottom: 10px; }
+#modal p { font-size: 9.5pt; color: var(--ink-mid); line-height: 1.6; margin-bottom: 8px; }
+#modal pre { font-family: var(--mono); font-size: 9pt; background: #f5f4f1; border: 1px solid var(--border); border-radius: 5px; padding: 10px; white-space: pre-wrap; word-break: break-all; margin: 6px 0 10px; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+@media (max-width: 760px) {
+  #app { flex-direction: column; }
+  #sidebar { width: 100%; max-height: 40vh; }
+  #content-area { padding: 16px 16px 40px; }
+  #topbar { padding: 0 12px; overflow-x: auto; }
+  table.answers th { width: 90px; }
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+
+<div id="app">
+  <div id="sidebar">
+    <div id="sidebar-header">
+      <div class="title">Reconciliation</div>
+      <div class="subtitle">Phase 1 &middot; Coder discrepancies</div>
+    </div>
+    <button id="overview-link" data-act="overview">⌂ Overview &amp; files</button>
+    <div id="filter-tabs"></div>
+    <div id="paper-list"></div>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <div id="topbar-title">Overview</div>
+      <span id="saved-indicator">✓ Saved in browser</span>
+      <button class="top-btn" data-act="third-modal">3rd coder list</button>
+      <button class="top-btn" data-act="save-progress">⬇ Save progress</button>
+      <button class="top-btn primary" data-act="export">⬇ Export results</button>
+    </div>
+    <div id="content-area"><div class="doc-card" id="content"></div></div>
+  </div>
+</div>
+
+<div id="modal-overlay"><div id="modal"></div></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// Reconciliation of the coders' answers to the Code Availability Protocol.
+//
+// Reads the backup JSON files that coders download from index.html
+// ("Download backup"), compares their answers per item, and lets the
+// project manager decide every item the coders did not agree on. Items
+// follow the protocol's routing (index.html, updateRouting): an item only
+// applies when the final answers to the questions before it lead there.
+// ══════════════════════════════════════════════════════════════════════
+
+const STORE_KEY = 'recon_state_v1';
+let state = { resolver_id: '', coders: {}, decisions: {} };
+const shots = {};          // shots[paperId][coderId] = object URL (in memory only)
+const ui = { view: 'overview', paperId: null, filter: 'open', override: {}, log: [] };
+
+// ── Keys written by older versions of index.html (copied from index.html,
+// migrateOldKeys), so backups made with an older version compare correctly
+const V1_KEY_RE = /^(q_readme|q3_(ps|ci|un)$|q5_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear|other_text)$|q6_(not_mentioned|broken|empty|request|restricted)$)/;
+function migrateV1(data) {
+  const out = {};
+  Object.entries(data).forEach(([k, v]) => {
+    const nk = k.startsWith('q_readme') ? 'q3' + k.slice('q_readme'.length)
+      : k.replace(/^q([3-6])_/, (_, n) => `q${+n + 1}_`);
+    out[nk] = v;
+  });
+  return out;
+}
+const V2_KEY_RE = /^(q4_(ps|ci|un)$|q4a_|q5_(source|link|notes)_\d+$|q6_(r|python|matlab|stata|julia|spss|mplus|c_cpp|shell|unclear)$|q7_(not_mentioned|broken|empty|request|restricted)$)/;
+function migrateV2(data) {
+  const out = {};
+  Object.entries(data).forEach(([k, v]) => {
+    const nk = k.startsWith('q4a_') ? 'q6_' + k.slice('q4a_'.length)
+      : k.startsWith('q4_') ? 'q5_' + k.slice('q4_'.length)
+      : k.startsWith('q5_') ? 'q4_' + k.slice('q5_'.length)
+      : k.startsWith('q6_') ? 'q7_' + k.slice('q6_'.length)
+      : k.startsWith('q7_') ? 'q8_' + k.slice('q7_'.length)
+      : k;
+    out[nk] = v;
+  });
+  return out;
+}
+function migrateOldKeys(data) {
+  if (!data) return data;
+  if (Object.keys(data).some(k => V1_KEY_RE.test(k))) data = migrateV1(data);
+  if (Object.keys(data).some(k => V2_KEY_RE.test(k))) data = migrateV2(data);
+  return data;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Items
+// Each item reads one answer from a coder's record: null when the coder
+// did not answer it, otherwise a string (single choice, text) or an array
+// (select-all-that-apply, links). `deps` are the items whose final answer
+// decides whether this item applies; `applies` mirrors index.html's routing.
+// ══════════════════════════════════════════════════════════════════════
+const isTrue = v => v === true || v === 'true';
+function singleVal(rec, prefix, codes) {
+  for (const c of codes) if (isTrue(rec[`${prefix}_${c}`])) return c;
+  return null;
+}
+function multiVal(rec, prefix, codes) {
+  const v = codes.filter(c => isTrue(rec[`${prefix}_${c}`]));
+  return v.length ? v : null;
+}
+function textVal(rec, key) {
+  const v = rec[key];
+  return v == null || String(v).trim() === '' ? null : String(v).trim();
+}
+function q4Rows(rec) {
+  const idx = new Set();
+  Object.keys(rec).forEach(k => { const m = k.match(/^q4_(source|link|notes)_(\d+)$/); if (m) idx.add(+m[2]); });
+  return [...idx].sort((a, b) => a - b)
+    .map(i => ({ source: textVal(rec, `q4_source_${i}`), link: textVal(rec, `q4_link_${i}`), notes: textVal(rec, `q4_notes_${i}`) }))
+    .filter(r => r.source || r.link || r.notes);
+}
+const normSpace = s => String(s).trim().toLowerCase().replace(/\s+/g, ' ');
+const normUrl = s => String(s).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/#?\s]+$/, '');
+const normNum = s => String(s).replace(/\s+/g, '');
+const normRef = s => normSpace(s).replace(/\bfig(ure)?s?\.?\s*/g, 'figure').replace(/\btab(le)?s?\.?\s*/g, 'table').replace(/[\s.]+/g, '');
+
+const opts = list => list.map(([code, label]) => ({ code, label }));
+const Q4_SOURCES = ['Journal website', 'External repository', 'In article PDF'];
+
+const ITEMS = [
+  { id: 'q1', sec: '1A', tag: 'Q1', q: 'Are any supplementary materials available?', type: 'single',
+    options: opts([['yes', 'Yes'], ['no', 'No'], ['paywall', 'Unable to access the journal website / supplements because of a paywall']]),
+    deps: [], applies: () => true },
+  { id: 'q2', sec: '1B', tag: 'Q2', q: 'Is any code available?', type: 'single',
+    options: opts([['yes', 'Yes'], ['no', 'No']]),
+    deps: ['q1'], applies: f => f.q1 === 'yes' },
+  { id: 'q3', sec: '1B', tag: 'Q3', q: 'Is a README or similar file provided with the code?', type: 'single',
+    options: opts([['yes', 'Yes'], ['no', 'No'], ['unsure', 'I am not sure']]),
+    deps: ['q2'], applies: f => f.q2 === 'yes', context: [['q3_notes', 'Notes']] },
+  { id: 'q4_source', sec: '1B', tag: 'Q4', q: 'Location of the code: source type(s)', type: 'multi',
+    options: opts(Q4_SOURCES.map(s => [s, s])),
+    extract: rec => { const s = Q4_SOURCES.filter(x => q4Rows(rec).some(r => r.source === x)); return s.length ? s : null; },
+    deps: ['q2'], applies: f => f.q2 === 'yes', q4context: true },
+  { id: 'q4_link', sec: '1B', tag: 'Q4', q: 'Location of the code: link(s) to the code', type: 'list', norm: normUrl,
+    extract: rec => { const l = q4Rows(rec).map(r => r.link).filter(Boolean); return l.length ? l : null; },
+    deps: ['q2'], applies: f => f.q2 === 'yes' },
+  { id: 'q5', sec: '2A', tag: 'Q5', q: 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?', type: 'single',
+    options: opts([['ps', 'Potentially sufficient'], ['ci', 'Unambiguously insufficient'], ['unsure', 'I am unsure'], ['un', 'Unable to open file(s)']]),
+    deps: ['q2'], applies: f => f.q2 === 'yes', context: [['q7_notes', 'Notes on code evaluation']] },
+  { id: 'q6', sec: '2A', tag: 'Q6', q: 'Why is the code unambiguously insufficient?', type: 'multi',
+    options: opts([['package', 'Code is a package but does not contain code to reproduce the simulation(s)'],
+                   ['other_part', 'Code belongs to other part of the paper (e.g., empirical example)'],
+                   ['example', 'Code is example/dummy code'],
+                   ['different_study', 'Code belongs to a different study or project'],
+                   ['other', 'Other']]),
+    deps: ['q5'], applies: f => f.q5 === 'ci', context: [['q6_other_text', 'Description (Other)']] },
+  { id: 'q7', sec: '2A', tag: 'Q7', q: 'In which programming language(s) was the simulation conducted?', type: 'multi',
+    options: opts([['r', 'R'], ['python', 'Python'], ['matlab', 'MATLAB'], ['stata', 'Stata'], ['julia', 'Julia'], ['spss', 'SPSS'],
+                   ['mplus', 'MPlus'], ['c_cpp', 'C/C++'], ['shell', 'Shell'], ['unclear', 'Unclear'], ['other', 'Other']]),
+    deps: ['q5'], applies: f => ['ps', 'unsure', 'un'].includes(f.q5) },
+  { id: 'q7_other_text', sec: '2A', tag: 'Q7 other', q: 'Other programming language(s)', type: 'text', norm: normSpace,
+    deps: ['q7'], applies: f => (f.q7 || []).includes('other') },
+  { id: 'q8', sec: '2B', tag: 'Q8', q: 'Why is code not openly available?', type: 'multi',
+    options: opts([['not_mentioned', 'Code sharing is not mentioned in the paper'],
+                   ['broken', 'Paper states that code is shared, but the link is broken'],
+                   ['empty', 'Paper states that code is shared, but it is not at the linked location'],
+                   ['request', 'Code is available upon request'],
+                   ['restricted', 'Code is available with restricted access'],
+                   ['other', 'Other']]),
+    deps: ['q1', 'q2'], applies: f => f.q1 === 'no' || f.q2 === 'no', context: [['q8_notes', 'Notes on unavailability']] },
+  { id: 'q_itr_main', sec: '3', tag: 'ITR main', q: 'Did you identify a suitable ITR in the main paper?', type: 'single',
+    options: opts([['yes', 'Yes'], ['no', 'No']]),
+    deps: ['q5'], applies: f => ['ps', 'unsure'].includes(f.q5) },
+  { id: 'q_itr_supp', sec: '3', tag: 'ITR supp.', q: 'Did you identify a suitable ITR in the supplementary materials?', type: 'single',
+    options: opts([['yes', 'Yes'], ['no', 'No']]),
+    deps: ['q_itr_main'], applies: f => f.q_itr_main === 'no' },
+  { id: 'itr_value', sec: '3', tag: 'ITR', q: 'Result (exact numerical value)', type: 'text', norm: normNum,
+    deps: ['q_itr_main', 'q_itr_supp'], applies: f => f.q_itr_main === 'yes' || f.q_itr_supp === 'yes', screenshots: true },
+  { id: 'itr_page', sec: '3', tag: 'ITR', q: 'Page number (as printed on the page)', type: 'text', norm: s => normSpace(s).replace(/\s+/g, ''),
+    deps: ['q_itr_main', 'q_itr_supp'], applies: f => f.q_itr_main === 'yes' || f.q_itr_supp === 'yes' },
+  { id: 'itr_table_num', sec: '3', tag: 'ITR', q: 'Figure / table with number', type: 'text', norm: normRef,
+    deps: ['q_itr_main', 'q_itr_supp'], applies: f => f.q_itr_main === 'yes' || f.q_itr_supp === 'yes' },
+  { id: 'itr_supp_link', sec: '3', tag: 'ITR', q: 'Link to supplement', type: 'text', norm: normUrl,
+    deps: ['q_itr_supp'], applies: f => f.q_itr_supp === 'yes' },
+];
+const ITEM_BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
+const SECTIONS = {
+  '1A': ['Section 1A', 'Identify all supplementary materials'],
+  '1B': ['Section 1B', 'Find code in materials'],
+  '2A': ['Section 2A', 'Evaluate code'],
+  '2B': ['Section 2B', 'Reasons for unavailable code'],
+  '3':  ['Section 3', 'Item to Reproduce (ITR)'],
+};
+
+function getValue(item, rec) {
+  if (item.extract) return item.extract(rec);
+  if (item.type === 'single') return singleVal(rec, item.id, item.options.map(o => o.code));
+  if (item.type === 'multi') return multiVal(rec, item.id, item.options.map(o => o.code));
+  return textVal(rec, item.id);
+}
+// Comparison key: answers with the same key count as agreement
+function keyOf(item, v) {
+  if (v == null) return null;
+  if (item.type === 'single') return v;
+  if (item.type === 'multi') return [...v].sort().join('|');
+  if (item.type === 'list') return [...new Set(v.map(item.norm))].sort().join('|');
+  return (item.norm || normSpace)(v);
+}
+function optLabel(item, code) { const o = (item.options || []).find(x => x.code === code); return o ? o.label : code; }
+function fmt(item, v) {
+  if (v == null) return '';
+  if (item.type === 'single') return optLabel(item, v);
+  if (item.type === 'multi') return v.map(c => optLabel(item, c)).join('; ');
+  if (item.type === 'list') return v.join('\n');
+  return v;
+}
+// Value as written to the CSV exports (codes, not labels)
+function exportVal(item, v) {
+  if (v == null) return '';
+  if (item.type === 'multi') return v.join(';');
+  if (item.type === 'list') return v.join(' | ');
+  return v;
+}
+// A coder has coded a paper once Q1 is answered
+const isCoded = rec => ITEMS[0].options.some(o => isTrue(rec[`q1_${o.code}`]));
+
+// ══════════════════════════════════════════════════════════════════════
+// Analysis of one paper
+// ══════════════════════════════════════════════════════════════════════
+const STATUS_LABEL = {
+  agree: 'Agreement', disagree: 'Disagreement', single: 'Only one coder answered', none: 'No coder answered',
+  na: 'Not applicable', pending: 'Decide earlier item first',
+};
+const PAPER_STATUS = {
+  open:     ['To resolve', 'Items still need a decision'],
+  third:    ['Awaiting 3rd coder', 'A coder hit a paywall (Q1) or could not open the code (Q5)'],
+  resolved: ['Resolved', 'All discrepancies decided'],
+  agreed:   ['Full agreement', 'Coders agreed on every item'],
+  waiting:  ['Awaiting coders', 'Fewer than two coders have coded this paper'],
+};
+
+function allPaperIds() {
+  const ids = new Set();
+  Object.values(state.coders).forEach(c => Object.keys(c.records).forEach(id => ids.add(id)));
+  return [...ids].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
+function analysePaper(pid) {
+  const coders = Object.keys(state.coders).sort()
+    .filter(cid => state.coders[cid].records[pid])
+    .map(cid => { const rec = state.coders[cid].records[pid]; return { id: cid, rec, active: isCoded(rec), complete: isTrue(rec._complete) }; });
+  const active = coders.filter(c => c.active);
+  const dec = state.decisions[pid] || { items: {} };
+  const final = {}, pending = {};
+
+  const items = ITEMS.map(item => {
+    const answers = active.map(c => ({ coder: c.id, value: getValue(item, c.rec) }));
+    const answered = answers.filter(a => a.value !== null);
+    const snapshot = JSON.stringify(answers.map(a => [a.coder, keyOf(item, a.value)]));
+    const d = (dec.items || {})[item.id];
+    const r = { item, answers, answered, snapshot, final: null, note: (d && d.note) || '', decision: d && 'value' in d ? d : null };
+
+    if (item.deps.some(x => pending[x])) { r.status = 'pending'; pending[item.id] = true; return finish(r); }
+    if (!item.applies(final)) { r.status = 'na'; return finish(r); }
+
+    const keys = new Set(answered.map(a => keyOf(item, a.value)));
+    r.status = answered.length === 0 ? 'none' : keys.size > 1 ? 'disagree' : answered.length === 1 ? 'single' : 'agree';
+    r.valid = !!r.decision && r.decision.snapshot === snapshot;
+    if (r.status === 'agree') {
+      r.override = r.valid;
+      r.final = r.valid ? r.decision.value : answered[0].value;
+      r.resolved = true;
+    } else {
+      r.needsDecision = true;
+      r.stale = !!r.decision && !r.valid;
+      r.resolved = r.valid;
+      if (r.valid) r.final = r.decision.value; else pending[item.id] = true;
+    }
+    return finish(r);
+  });
+
+  function finish(r) {
+    const fk = keyOf(r.item, r.final);
+    r.matches = r.final == null ? [] : r.answered.filter(a => keyOf(r.item, a.value) === fk).map(a => a.coder);
+    r.resolution = r.status === 'na' ? 'not_applicable'
+      : r.status === 'pending' || (r.needsDecision && !r.resolved) ? 'unresolved'
+      : r.status === 'agree' ? (r.override ? 'resolver_override' : 'agreement')
+      : r.matches.length ? 'coder_choice' : 'resolver_own';
+    final[r.item.id] = r.final;
+    return r;
+  }
+
+  const triggers = [];
+  active.forEach(c => {
+    if (isTrue(c.rec.q1_paywall)) triggers.push({ coder: c.id, reason: 'Q1: paywall' });
+    if (isTrue(c.rec.q5_un)) triggers.push({ coder: c.id, reason: 'Q5: unable to open file(s)' });
+  });
+  const waived = !!dec.no_third;
+  const needsThird = triggers.length > 0 && active.length < 3 && !waived;
+  // Items that can be decided now (items waiting on them are not counted:
+  // many of those turn out not to apply once the earlier item is decided)
+  const open = items.filter(r => r.resolution === 'unresolved' && r.status !== 'pending');
+  const decided = items.filter(r => r.needsDecision || r.override);
+  const disagreements = items.filter(r => r.status === 'disagree');
+  let status;
+  if (active.length < 2) status = 'waiting';
+  else if (needsThird) status = 'third';
+  else if (decided.length === 0) status = 'agreed';
+  else if (open.length) status = 'open';
+  else status = 'resolved';
+
+  const metaRec = (coders.find(c => c.rec.meta_title) || coders[0] || {}).rec || {};
+  return { pid, coders, active, items, final, triggers, waived, needsThird, open, decided, disagreements, status, dec, meta: metaRec };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Storage
+// ══════════════════════════════════════════════════════════════════════
+let storageWarned = false;
+function persist() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    const ind = document.getElementById('saved-indicator');
+    ind.classList.add('show');
+    clearTimeout(persist._t);
+    persist._t = setTimeout(() => ind.classList.remove('show'), 1500);
+  } catch (e) {
+    if (!storageWarned) {
+      storageWarned = true;
+      alert('Your progress could not be saved in this browser (storage full or blocked). Use "Save progress" regularly to keep a copy.');
+    }
+  }
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s && s.coders) state = { resolver_id: s.resolver_id || '', coders: s.coders, decisions: s.decisions || {} };
+  } catch (e) {}
+}
+function getDec(pid) {
+  if (!state.decisions[pid]) state.decisions[pid] = { items: {} };
+  if (!state.decisions[pid].items) state.decisions[pid].items = {};
+  return state.decisions[pid];
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Loading files
+// ══════════════════════════════════════════════════════════════════════
+const readText = file => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsText(file); });
+const hasAnswers = rec => Object.keys(rec).some(k => /^q/.test(k) && rec[k] !== null && rec[k] !== '' && rec[k] !== false);
+
+async function loadCoderFiles(files) {
+  ui.log = [];
+  for (const file of files) {
+    let data;
+    try { data = JSON.parse(await readText(file)); }
+    catch (e) { ui.log.push(['warn', `${file.name}: not a valid JSON file — skipped.`]); continue; }
+    if (data && data.type === 'reconciliation') {
+      ui.log.push(['warn', `${file.name} is a saved reconciliation file — use "Restore progress" for it.`]);
+      continue;
+    }
+    if (!data || !Array.isArray(data.records)) {
+      ui.log.push(['warn', `${file.name}: no coder records found — is this a backup from index.html? Skipped.`]);
+      continue;
+    }
+    const cid = String(data.coder_id || (data.records[0] || {}).coder_id || '').trim();
+    if (!cid) { ui.log.push(['warn', `${file.name}: no coder ID in the file — skipped.`]); continue; }
+    const exported = data.exported || '';
+    const coder = state.coders[cid] || (state.coders[cid] = { coder_id: cid, files: [], records: {} });
+    let added = 0, replaced = 0, kept = 0, coded = 0;
+    data.records.forEach(r => {
+      if (!r || !r.paper_id) return;
+      const { coder_id, paper_id, paper_title, ...rest } = r;
+      const rec = { ...migrateOldKeys(rest), paper_title, _exported: exported, _file: file.name };
+      const old = coder.records[paper_id];
+      // The newest backup wins, unless it has no answers for a paper the
+      // older one does have answers for (e.g. a later batch on another device)
+      if (!old) { coder.records[paper_id] = rec; added++; }
+      else if ((exported >= (old._exported || '') && (hasAnswers(rec) || !hasAnswers(old))) || (!hasAnswers(old) && hasAnswers(rec))) {
+        coder.records[paper_id] = rec; replaced++;
+      } else kept++;
+      if (isCoded(rec)) coded++;
+    });
+    coder.files = coder.files.filter(f => !(f.name === file.name && f.exported === exported));
+    coder.files.push({ name: file.name, exported, papers: data.records.length, loaded_at: new Date().toISOString() });
+    let msg = `${cid}: ${data.records.length} papers in ${file.name} (${coded} coded)`;
+    if (replaced) msg += `, ${replaced} replaced earlier records`;
+    if (kept) msg += `, ${kept} kept from a file loaded earlier (that one has answers, this one does not)`;
+    ui.log.push([coded ? 'ok' : 'warn', msg + (coded ? '' : ' — this looks like an empty batch file, not a coder backup')]);
+  }
+  persist();
+  renderAll();
+}
+
+async function loadScreenshotZips(files) {
+  if (typeof JSZip === 'undefined') { alert('The ZIP library could not be loaded (no internet connection?).'); return; }
+  ui.log = [];
+  const pids = allPaperIds();
+  const safe = id => id.replace(/[\\/:*?"<>|\s]+/g, '_');   // as in index.html's file names
+  const coderBySafe = Object.fromEntries(Object.keys(state.coders).map(c => [safe(c), c]));
+  for (const file of files) {
+    let zip, n = 0;
+    try { zip = await JSZip.loadAsync(file); }
+    catch (e) { ui.log.push(['warn', `${file.name}: not a valid ZIP file — skipped.`]); continue; }
+    for (const name of Object.keys(zip.files)) {
+      const base = name.split('/').pop();
+      const m = base.match(/^(.+)_ITR_screenshot\.(png|jpe?g|gif|webp|bmp)$/i);
+      if (!m) continue;
+      const pid = pids.find(p => m[1].startsWith(p + '_'));
+      if (!pid) continue;
+      const coderSafe = m[1].slice(pid.length + 1);
+      const cid = coderBySafe[coderSafe] || coderSafe;
+      const blob = await zip.files[name].async('blob');
+      const type = 'image/' + (m[2].toLowerCase() === 'jpg' ? 'jpeg' : m[2].toLowerCase());
+      (shots[pid] = shots[pid] || {})[cid] = URL.createObjectURL(new Blob([blob], { type }));
+      n++;
+    }
+    ui.log.push([n ? 'ok' : 'warn', `${file.name}: ${n} screenshot${n !== 1 ? 's' : ''} loaded`]);
+  }
+  renderAll();
+}
+
+async function restoreProgress(file) {
+  let data;
+  try { data = JSON.parse(await readText(file)); } catch (e) { alert('This file could not be read.'); return; }
+  if (!data || data.type !== 'reconciliation' || !data.coders) {
+    alert('This is not a saved reconciliation file (download one with "Save progress").');
+    return;
+  }
+  if (Object.keys(state.coders).length && !confirm('Replace everything currently loaded (coder files and decisions) with the contents of this file?')) return;
+  state = { resolver_id: data.resolver_id || state.resolver_id || '', coders: data.coders, decisions: data.decisions || {} };
+  ui.log = [['ok', `Restored ${file.name}: ${Object.keys(state.coders).length} coders, ${allPaperIds().length} papers.`]];
+  persist();
+  renderAll();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Decisions
+// ══════════════════════════════════════════════════════════════════════
+// Text fields save on "change" (when they lose focus), often because the
+// resolver is clicking a button. Re-rendering at that moment would replace the
+// button under the mouse and swallow the click, so wait until the click is done.
+let pointerDown = false, deferredRender = false;
+document.addEventListener('pointerdown', () => { pointerDown = true; }, true);
+document.addEventListener('pointerup', () => {
+  pointerDown = false;
+  if (deferredRender) { deferredRender = false; setTimeout(renderAll, 0); }
+}, true);
+function renderSoon() { if (pointerDown) deferredRender = true; else renderAll(); }
+
+function setDecision(pid, itemId, value) {
+  const a = analysePaper(pid);
+  const r = a.items.find(x => x.item.id === itemId);
+  const d = getDec(pid);
+  const prev = d.items[itemId] || {};
+  const empty = value == null || (Array.isArray(value) && value.length === 0) || (typeof value === 'string' && value.trim() === '');
+  if (empty) {
+    if (prev.note) d.items[itemId] = { note: prev.note }; else delete d.items[itemId];
+  } else {
+    d.items[itemId] = { value, note: prev.note || '', snapshot: r.snapshot, decided_at: new Date().toISOString(), resolver: state.resolver_id || '' };
+  }
+  persist();
+  renderSoon();
+}
+// Accepts the answer for every open item only one coder answered (typically
+// because the other coder was routed elsewhere). Accepting one can make the
+// next items apply, so repeat until nothing changes.
+function acceptSingles(pid) {
+  const d = getDec(pid);
+  for (let pass = 0; pass < ITEMS.length; pass++) {
+    const singles = analysePaper(pid).items.filter(r => r.status === 'single' && !r.resolved);
+    if (!singles.length) break;
+    singles.forEach(r => {
+      const prev = d.items[r.item.id] || {};
+      d.items[r.item.id] = { value: r.answered[0].value, note: prev.note || '', snapshot: r.snapshot, decided_at: new Date().toISOString(), resolver: state.resolver_id || '' };
+    });
+  }
+  persist();
+  renderAll();
+}
+
+function setNote(pid, itemId, note) {
+  const d = getDec(pid);
+  const cur = d.items[itemId] || {};
+  if (!note && !('value' in cur)) delete d.items[itemId];
+  else d.items[itemId] = { ...cur, note };
+  persist();
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Rendering
+// ══════════════════════════════════════════════════════════════════════
+function esc(v) {
+  return v == null ? '' : String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function renderAll() {
+  renderSidebar();
+  if (ui.view === 'paper' && ui.paperId && allPaperIds().includes(ui.paperId)) renderPaper(ui.paperId);
+  else { ui.view = 'overview'; renderOverview(); }
+}
+
+function analyseAll() { return allPaperIds().map(analysePaper); }
+
+function renderSidebar() {
+  const all = analyseAll();
+  const counts = { all: all.length };
+  Object.keys(PAPER_STATUS).forEach(s => counts[s] = all.filter(a => a.status === s).length);
+  const tabs = [['open', 'To resolve'], ['third', '3rd coder'], ['resolved', 'Resolved'], ['agreed', 'Agreed'], ['waiting', 'Awaiting'], ['all', 'All']]
+    .filter(([k]) => k === 'open' || k === 'all' || counts[k] > 0 || ui.filter === k);
+  document.getElementById('filter-tabs').innerHTML = tabs.map(([k, l]) =>
+    `<button class="filter-tab${ui.filter === k ? ' active' : ''}" data-act="filter" data-filter="${k}">${l}<span class="n">${counts[k] || 0}</span></button>`).join('');
+
+  const shown = all.filter(a => ui.filter === 'all' || a.status === ui.filter);
+  const icon = { open: '!', third: '3', resolved: '✓', agreed: '✓', waiting: '…' };
+  document.getElementById('paper-list').innerHTML = shown.length ? shown.map(a => {
+    const sub = a.status === 'open' ? `${a.pid} · ${a.open.length} open` : `${a.pid} · ${PAPER_STATUS[a.status][0]}`;
+    const label = a.meta.paper_title || a.meta.meta_title || a.pid;
+    return `<div class="paper-item${ui.view === 'paper' && ui.paperId === a.pid ? ' active' : ''}" data-act="paper" data-pid="${esc(a.pid)}">
+      <div class="sdot ${a.status}">${icon[a.status]}</div>
+      <div class="paper-label"><div class="paper-title-short">${esc(label)}</div><div class="paper-status">${esc(sub)} · ${a.active.length} coder${a.active.length !== 1 ? 's' : ''}</div></div>
+    </div>`;
+  }).join('') : `<div class="list-empty">${all.length ? 'No papers in this list.' : 'Load the coders\' backup files on the Overview page to begin.'}</div>`;
+  document.getElementById('overview-link').classList.toggle('active', ui.view === 'overview');
+}
+
+function renderOverview() {
+  document.getElementById('topbar-title').innerHTML = 'Overview';
+  ui.lastRendered = null;
+  const coders = Object.values(state.coders).sort((a, b) => a.coder_id.localeCompare(b.coder_id));
+  const all = analyseAll();
+  const nShots = Object.values(shots).reduce((n, s) => n + Object.keys(s).length, 0);
+  const counts = {};
+  Object.keys(PAPER_STATUS).forEach(s => counts[s] = all.filter(a => a.status === s).length);
+  const firstOpen = all.find(a => a.status === 'open');
+
+  document.getElementById('content').innerHTML = `
+    <h1 class="page-title">Resolving coder discrepancies</h1>
+    <p class="lead">Load the backup files of all coders (including any third coders). Their answers are compared item by item, following the routing of the protocol. Items on which the coders agree are accepted automatically; you only decide the items on which they differ. Your decisions are saved in this browser as you go.</p>
+
+    <div class="panel">
+      <h3>Your name or ID</h3>
+      <p class="muted small">Stored with every decision you make.</p>
+      <input class="text-in" style="max-width:280px;margin-top:6px" data-field="resolver" value="${esc(state.resolver_id)}" placeholder="e.g. AnoukB">
+    </div>
+
+    <div class="panel">
+      <h3>1 · Coder backup files</h3>
+      <p>Upload the <code>backup_&lt;coder&gt;_&lt;date&gt;.json</code> files the coders sent you (from <em>Download backup</em> in the protocol app). You can select several files at once, and add files later, e.g. when a third coder is done. If a coder sends a newer backup, its answers replace the older ones.</p>
+      <label class="upload-label">📂 Upload coder backups (.json)<input type="file" accept=".json" multiple data-upload="coders"></label>
+      ${coders.length ? `<table class="data">
+        <thead><tr><th>Coder</th><th>Files</th><th>Papers</th><th>Coded</th><th>Complete</th><th></th></tr></thead>
+        <tbody>${coders.map(c => {
+          const recs = Object.values(c.records);
+          const coded = recs.filter(isCoded).length, complete = recs.filter(r => isTrue(r._complete)).length;
+          const latest = c.files.map(f => f.exported).sort().pop() || '';
+          return `<tr><td><b>${esc(c.coder_id)}</b></td>
+            <td class="small">${c.files.map(f => esc(f.name)).join('<br>')}${latest ? `<div class="muted">latest export ${esc(latest.slice(0, 10))}</div>` : ''}</td>
+            <td>${recs.length}</td><td>${coded}</td><td>${complete}</td>
+            <td><button class="btn link" data-act="remove-coder" data-coder="${esc(c.coder_id)}">remove</button></td></tr>`;
+        }).join('')}</tbody></table>` : ''}
+      ${ui.log.length ? `<div class="log">${ui.log.map(([t, m]) => `<div class="${t}">${t === 'ok' ? '✓' : '⚠'} ${esc(m)}</div>`).join('')}</div>` : ''}
+    </div>
+
+    <div class="panel">
+      <h3>2 · ITR screenshots <span class="muted small" style="font-family:var(--sans);font-weight:400">(optional)</span></h3>
+      <p>Upload the <code>screenshots_&lt;coder&gt;_&lt;date&gt;.zip</code> files to see each coder's ITR screenshot next to their ITR answers. Screenshots are only kept while this tab is open, so upload them again after reopening the page.</p>
+      <label class="upload-label">🖼 Upload screenshot ZIPs<input type="file" accept=".zip" multiple data-upload="shots"></label>
+      <span class="small muted">${nShots} screenshot${nShots !== 1 ? 's' : ''} loaded</span>
+    </div>
+
+    <div class="panel">
+      <h3>3 · Papers</h3>
+      ${all.length ? `<div class="stat-grid">${Object.entries(PAPER_STATUS).map(([k, [l, d]]) =>
+        `<div class="stat" data-act="filter" data-filter="${k}"><div class="num">${counts[k]}</div><div class="lbl">${l}</div><div class="desc">${d}</div></div>`).join('')}</div>
+        <p class="small muted">${all.length} papers in total. A paper is sent to a third coder when a coder selected the paywall option in Q1 or "Unable to open file(s)" in Q5; use <em>3rd coder list</em> (top bar) for the paper IDs to put in <code>GENERATE_BATCH.R</code>.</p>
+        ${firstOpen ? `<button class="btn primary" data-act="paper" data-pid="${esc(firstOpen.pid)}">Start resolving →</button>` : ''}`
+      : '<p class="muted">No coder files loaded yet.</p>'}
+    </div>
+
+    <div class="panel">
+      <h3>4 · Save and export</h3>
+      <ul>
+        <li><b>Save progress</b> downloads one file with all loaded coder answers and your decisions. Restore it here to continue on another computer or browser.</li>
+        <li><b>Export results</b> downloads a ZIP with the final dataset (one row per paper), the item-level comparison (every item, every coder, and how it was resolved), all coder answers, and a codebook.</li>
+      </ul>
+      <button class="btn" data-act="save-progress">⬇ Save progress</button>
+      <label class="upload-label">📂 Restore progress (.json)<input type="file" accept=".json" data-upload="restore"></label>
+      <button class="btn primary" data-act="export">⬇ Export results</button>
+      <button class="btn danger" data-act="reset">Start over…</button>
+    </div>`;
+}
+
+function badgesFor(r, groups, valKey) {
+  return r.answered.filter(a => keyOf(r.item, a.value) === valKey || (r.item.type === 'multi' && a.value.includes(valKey)))
+    .map(a => `<span class="badge grp-${groups[keyOf(r.item, a.value)] % 4}">${esc(a.coder)}</span>`).join('');
+}
+
+function renderItem(a, r) {
+  const item = r.item;
+  const pid = a.pid;
+  const groups = {};
+  r.answered.forEach(x => { const k = keyOf(item, x.value); if (!(k in groups)) groups[k] = Object.keys(groups).length; });
+
+  const answersTable = (neutral = false) => `<table class="answers"><tbody>${r.answers.map(x => {
+    const k = keyOf(item, x.value);
+    const ctx = [];
+    (item.context || []).forEach(([key, label]) => { const v = textVal(a.coders.find(c => c.id === x.coder).rec, key); if (v) ctx.push(`<div class="ctx"><b>${esc(label)}:</b> ${esc(v)}</div>`); });
+    if (item.q4context) {
+      q4Rows(a.coders.find(c => c.id === x.coder).rec).forEach((row, i) =>
+        ctx.push(`<div class="ctx"><b>Row ${i + 1}:</b> ${esc(row.source || '—')} · ${esc(row.link || '—')}${row.notes ? `\n<b>Notes:</b> ${esc(row.notes)}` : ''}</div>`));
+    }
+    return `<tr><th>${esc(x.coder)}</th>${x.value === null
+      ? `<td class="none">not answered${r.status !== 'none' ? ' (routed elsewhere)' : ''}${ctx.join('')}</td>`
+      : `<td class="${neutral ? 'none' : 'grp-' + groups[k] % 4}" style="${neutral ? 'font-style:normal;color:var(--ink-mid)' : ''}">${esc(fmt(item, x.value))}${ctx.join('')}</td>`}</tr>`;
+  }).join('')}</tbody></table>`;
+
+  const screenshots = () => {
+    if (!item.screenshots) return '';
+    const s = shots[pid] || {};
+    const imgs = a.active.filter(c => s[c.id]).map(c =>
+      `<div class="shot"><div class="who">${esc(c.id)}</div><img src="${s[c.id]}" alt="ITR screenshot ${esc(c.id)}" data-act="open-img" data-src="${s[c.id]}"></div>`);
+    return imgs.length ? `<div class="shots">${imgs.join('')}</div>`
+      : `<div class="ctx muted" style="margin-top:6px">No screenshots loaded for this paper (upload the coders' screenshot ZIPs on the Overview page).</div>`;
+  };
+
+  const head = chipHtml => `<div class="item-head"><span class="q-tag">${esc(item.tag)}</span><span class="q-text">${esc(item.q)}</span>${chipHtml}</div>`;
+
+  if (r.status === 'na') {
+    if (!r.answered.length) return '';
+    return `<div class="item-card na">${head('<span class="chip na">Not applicable</span>')}<div class="item-body">
+      <div class="ctx muted">Does not apply given the final answers above; ${r.answered.map(x => `${esc(x.coder)} answered "${esc(fmt(item, x.value))}"`).join(', ')}.</div></div></div>`;
+  }
+  if (r.status === 'pending') {
+    const dep = item.deps.map(d => ITEM_BY_ID[d].tag).join(' / ');
+    return `<div class="item-card pending">${head('<span class="chip pending">Waiting</span>')}<div class="item-body">
+      <div class="ctx muted" style="margin-bottom:4px">Decide ${esc(dep)} first; whether this item applies depends on it.</div>
+      ${r.answered.length ? answersTable(true) : ''}</div></div>`;
+  }
+  if (r.status === 'agree' && !ui.override[pid + '|' + item.id] && !r.override) {
+    const who = r.answered.length === a.active.length ? 'All coders' : r.answered.map(x => x.coder).join(' & ');
+    const hasNotes = a.active.some(c => (item.context || []).some(([k]) => textVal(c.rec, k)) || (item.q4context && q4Rows(c.rec).some(row => row.notes || q4Rows(c.rec).length > 1)));
+    const extra = hasNotes ? `<details><summary class="small muted" style="cursor:pointer">Coder notes</summary>${answersTable()}</details>` : '';
+    const shotHtml = screenshots();
+    return `<div class="item-card agree">
+      <div class="item-head"><span class="q-tag">${esc(item.tag)}</span><span class="q-text">${esc(item.q)}</span>
+        <span class="agree-val" title="${esc(who)}">${esc(fmt(item, r.final))}</span>
+        <span class="chip agree">Agreement</span><button class="btn link" data-act="override" data-item="${item.id}">change</button></div>
+      ${extra || item.screenshots ? `<div class="item-body">${extra}${shotHtml}</div>` : ''}</div>`;
+  }
+
+  // Needs a decision (or the resolver chose to override an agreement)
+  const cls = r.override ? 'resolved' : r.resolved ? 'resolved' : r.stale ? 'stale' : r.status;
+  const chip = r.override ? '<span class="chip resolved">Overridden</span>'
+    : r.resolved ? '<span class="chip resolved">✓ Decided</span>'
+    : r.stale ? '<span class="chip stale">Coder answers changed</span>'
+    : `<span class="chip ${r.status}">${STATUS_LABEL[r.status]}</span>`;
+  const cur = r.decision ? r.decision.value : null;
+  const curKey = keyOf(item, cur);
+  let control = '';
+  if (item.type === 'single' || item.type === 'multi') {
+    const multi = item.type === 'multi';
+    control = `<div class="opt-grid${item.options.length > 6 ? ' cols' : ''}">${item.options.map(o => {
+      const sel = multi ? (cur || []).includes(o.code) : cur === o.code;
+      return `<button class="opt${multi ? '' : ' radio'}${sel ? ' selected' : ''}" data-act="${multi ? 'toggle' : 'pick'}" data-item="${item.id}" data-val="${esc(o.code)}">
+        <span class="box">${sel ? '✓' : ''}</span><span class="txt">${esc(o.label)}</span><span class="badges">${badgesFor(r, groups, o.code)}</span></button>`;
+    }).join('')}</div>`;
+    if (multi && r.answered.length) {
+      control = `<div class="use-row">${r.answered.map(x => `<button class="use-btn" data-act="use" data-item="${item.id}" data-coder="${esc(x.coder)}">Use ${esc(x.coder)}'s answer</button>`).join('')}</div>` + control;
+    }
+  } else {
+    const val = item.type === 'list' ? (cur || []).join('\n') : (cur || '');
+    control = `${r.answered.length ? `<div class="use-row">${r.answered.map(x => `<button class="use-btn" data-act="use" data-item="${item.id}" data-coder="${esc(x.coder)}">Use ${esc(x.coder)}'s answer</button>`).join('')}</div>` : ''}
+      ${item.type === 'list'
+        ? `<textarea class="text-in" data-field="list" data-item="${item.id}" rows="3" placeholder="One link per line">${esc(val)}</textarea>`
+        : `<input class="text-in" data-field="text" data-item="${item.id}" value="${esc(val)}" placeholder="Final answer">`}`;
+  }
+  let status = '';
+  if (r.stale) status = `<div class="banner yellow" style="margin-top:8px">The coders' answers to this item changed after you decided it (a newer backup was loaded). Check your decision below and confirm it. <button class="btn link" data-act="confirm" data-item="${item.id}">Confirm decision</button></div>`;
+  else if (r.resolved) {
+    const how = r.override ? 'Overrides the coders\' agreement'
+      : r.matches.length ? `Matches ${r.matches.join(' & ')}` : 'Your own answer (matches no coder)';
+    status = `<div class="decided-line">✓ ${esc(how)}${r.decision && r.decision.decided_at ? ` · ${esc(r.decision.decided_at.slice(0, 10))}` : ''}<button class="btn link" data-act="clear" data-item="${item.id}">${r.override ? 'remove override' : 'clear decision'}</button></div>`;
+  } else if (r.status === 'agree') {
+    status = `<div class="decided-line" style="color:var(--ink-muted)">Pick an answer to override the agreement. <button class="btn link" data-act="cancel-override" data-item="${item.id}">cancel</button></div>`;
+  }
+  return `<div class="item-card ${cls}">${head(chip)}<div class="item-body">
+    ${answersTable()}
+    ${screenshots()}
+    <div class="decision">
+      <div class="decision-title">Final answer</div>
+      ${control}
+      ${status}
+      <div class="note-row"><label>Resolution note (optional)</label><input class="text-in" data-field="note" data-item="${item.id}" value="${esc(r.note)}" placeholder="Why this answer?"></div>
+    </div></div></div>`;
+}
+
+function renderPaper(pid) {
+  const a = analysePaper(pid);
+  const m = a.meta;
+  document.getElementById('topbar-title').innerHTML = `${esc(m.paper_title || m.meta_title || pid)} <span>${esc(pid)}</span>`;
+
+  const coderChips = a.coders.map(c => {
+    const date = textVal(c.rec, 'meta_date');
+    if (!c.active) return `<span class="coder-chip inactive">${esc(c.id)} · no answers</span>`;
+    return `<span class="coder-chip${c.complete ? '' : ' incomplete'}">${esc(c.id)}${date ? ` · ${esc(date)}` : ''} · ${c.complete ? '✓ complete' : 'form incomplete'}</span>`;
+  }).join('');
+
+  let banners = '';
+  if (a.active.length < 2) banners += `<div class="banner info">Only ${a.active.length} coder${a.active.length !== 1 ? 's have' : ' has'} coded this paper so far. Load the other coder's backup to compare.</div>`;
+  if (a.triggers.length) {
+    const who = a.triggers.map(t => `${esc(t.coder)} (${esc(t.reason)})`).join(', ');
+    if (a.active.length >= 3) banners += `<div class="banner info">A third coder was needed because of ${who}; ${a.active.length} coders are loaded for this paper.</div>`;
+    else banners += `<div class="banner yellow"><b>Third coder needed:</b> ${who}.
+      ${a.waived ? 'You marked that no third coder is needed.' : 'Load the third coder\'s backup when it is available. You can already decide items below.'}
+      <br><label><input type="checkbox" data-field="no_third" ${a.waived ? 'checked' : ''}> No third coder needed — resolve this paper with the current coders</label></div>`;
+  }
+  const nNeed = a.decided.length;
+  const singles = a.open.filter(r => r.status === 'single');
+  const singleBtn = singles.length ? `<div class="banner info"><b>${singles.length}</b> open item${singles.length !== 1 ? 's were' : ' was'} answered by only one coder (${esc([...new Set(singles.map(r => r.answered[0].coder))].join(', '))}): ${esc(singles.map(r => r.item.tag).join(', '))}.
+    <button class="btn" style="margin:6px 0 0;display:block" data-act="accept-singles">Accept the only answer for these items (and any that follow from them)</button></div>` : '';
+  const progress = a.status === 'agreed' ? '<div class="banner green">The coders agreed on every item. Nothing to decide.</div>'
+    : `<div class="progress-line"><b>${a.disagreements.length}</b> disagreement${a.disagreements.length !== 1 ? 's' : ''} · <b>${nNeed}</b> item${nNeed !== 1 ? 's' : ''} for you to decide · <b>${a.open.length}</b> still open${a.items.some(r => r.status === 'pending') ? ' (more items may follow from your decisions)' : ''}</div>`;
+
+  let html = `<div class="paper-head">
+    <div class="pid">${esc(pid)}${m.meta_journal ? ' · ' + esc(m.meta_journal) : ''}${m.meta_year ? ' · ' + esc(m.meta_year) : ''}</div>
+    <h1>${esc(m.meta_title || m.paper_title || pid)}</h1>
+    ${m.meta_authors ? `<div class="authors">${esc(m.meta_authors)}</div>` : ''}
+    ${m.meta_doi ? `<a href="https://doi.org/${esc(m.meta_doi)}" target="_blank" rel="noopener">https://doi.org/${esc(m.meta_doi)}</a>` : ''}
+    <div class="coder-strip">${coderChips}</div>
+    ${banners}${progress}${singleBtn}
+  </div>`;
+
+  let sec = null;
+  a.items.forEach(r => {
+    const card = renderItem(a, r);
+    if (!card) return;
+    if (r.item.sec !== sec) {
+      sec = r.item.sec;
+      html += `<div class="section-header"><span class="sec-label">${SECTIONS[sec][0]}</span><h2>${SECTIONS[sec][1]}</h2></div>`;
+    }
+    html += card;
+  });
+
+  const gnotes = a.active.map(c => [c.id, textVal(c.rec, 'general_notes')]).filter(([, v]) => v);
+  html += `<div class="section-header"><span class="sec-label">Notes</span><h2>General notes and your note on this paper</h2></div>
+    <div class="notes-block">
+      ${gnotes.length ? `<table class="answers"><tbody>${gnotes.map(([c, v]) => `<tr><th>${esc(c)}</th><td style="background:#f7f6f3">${esc(v)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="ctx muted">No general notes from the coders.</div>'}
+      <div class="note-row" style="margin-top:12px"><label>Your note on this paper (optional)</label>
+        <textarea class="text-in" data-field="paper_note" rows="3" placeholder="Anything worth recording about how this paper was resolved">${esc(a.dec.paper_note || '')}</textarea></div>
+    </div>`;
+
+  const all = analyseAll();
+  const idx = all.findIndex(x => x.pid === pid);
+  const next = all.slice(idx + 1).concat(all.slice(0, idx)).find(x => x.status === 'open');
+  html += `<div class="next-row">
+    ${next ? `<button class="btn primary" data-act="paper" data-pid="${esc(next.pid)}">Next paper to resolve (${esc(next.pid)}) →</button>` : '<span class="small muted">No other papers to resolve.</span>'}
+  </div>`;
+
+  const area = document.getElementById('content-area');
+  const keepScroll = ui.lastRendered === pid ? area.scrollTop : 0;
+  document.getElementById('content').innerHTML = html;
+  area.scrollTop = keepScroll;
+  ui.lastRendered = pid;
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Exports
+// ══════════════════════════════════════════════════════════════════════
+function csv(rows) {
+  const cell = v => { const s = v == null ? '' : String(v); return /[",\n\r]/.test(s) || /^\s|\s$/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  return rows.map(r => r.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+const tf = b => b ? 'TRUE' : 'FALSE';
+const dateStr = () => new Date().toISOString().slice(0, 10);
+function download(name, blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url; link.download = name;
+  document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function progressJson() {
+  return JSON.stringify({ type: 'reconciliation', version: 1, saved: new Date().toISOString(), ...state }, null, 2);
+}
+function saveProgress() {
+  download(`reconciliation_progress_${dateStr()}.json`, new Blob([progressJson()], { type: 'application/json' }));
+}
+
+function buildFinalDataset(all) {
+  const head = ['paper_id', 'short_label', 'title', 'authors', 'year', 'journal', 'doi',
+    'n_coders', 'coder_ids', 'third_coder_triggered', 'third_coder_triggers', 'third_coder_waived',
+    'status', 'has_disagreement', 'n_disagreements', 'disagreement_items',
+    'n_resolver_decisions', 'resolver_decision_items', 'n_open_items', 'open_items',
+    ...ITEMS.map(i => i.id), 'resolutions', 'resolver_id', 'last_decision_at', 'paper_note'];
+  const rows = all.map(a => {
+    const m = a.meta;
+    const used = a.items.filter(r => r.decision && ['coder_choice', 'resolver_own', 'resolver_override'].includes(r.resolution));
+    const decTimes = used.map(r => r.decision.decided_at).filter(Boolean).sort();
+    const resolvers = [...new Set(used.map(r => r.decision.resolver).filter(Boolean))];
+    const resol = a.items.filter(r => ['coder_choice', 'resolver_own', 'resolver_override'].includes(r.resolution))
+      .map(r => `${r.item.id}: ${r.resolution === 'coder_choice' ? 'chose ' + r.matches.join(' & ') : r.resolution === 'resolver_own' ? 'own answer' : 'override'}`);
+    return [a.pid, m.paper_title || '', m.meta_title || '', m.meta_authors || '', m.meta_year || '', m.meta_journal || '', m.meta_doi || '',
+      a.active.length, a.active.map(c => c.id).join(';'), tf(a.triggers.length > 0), a.triggers.map(t => `${t.coder}: ${t.reason}`).join('; '), tf(a.waived),
+      a.status === 'third' ? 'awaiting_third_coder' : a.status === 'waiting' ? 'awaiting_coders' : a.status,
+      tf(a.disagreements.length > 0), a.disagreements.length, a.disagreements.map(r => r.item.id).join(';'),
+      a.decided.length, a.decided.map(r => r.item.id).join(';'), a.open.length, a.open.map(r => r.item.id).join(';'),
+      ...a.items.map(r => exportVal(r.item, r.final)),
+      resol.join('; '), resolvers.join(';'), decTimes.pop() || '', a.dec.paper_note || ''];
+  });
+  return csv([head, ...rows]);
+}
+
+function buildItemLevel(all) {
+  const maxC = Math.max(2, ...all.map(a => a.active.length));
+  const coderCols = [];
+  for (let i = 1; i <= maxC; i++) coderCols.push(`coder${i}_id`, `coder${i}_answer`);
+  const head = ['paper_id', 'item', 'item_tag', 'question', 'n_coders', 'n_answered', ...coderCols,
+    'status', 'final_answer', 'resolution', 'matches_coders', 'resolution_note', 'decided_at', 'resolver_id'];
+  const rows = [];
+  all.forEach(a => a.items.forEach(r => {
+    const cc = [];
+    for (let i = 0; i < maxC; i++) { const x = r.answers[i]; cc.push(x ? x.coder : '', x ? exportVal(r.item, x.value) : ''); }
+    const used = r.decision && ['coder_choice', 'resolver_own', 'resolver_override'].includes(r.resolution);
+    const statusOut = { agree: 'agreement', disagree: 'disagreement', single: 'one_coder', none: 'no_coder', na: 'not_applicable', pending: 'pending' }[r.status];
+    rows.push([a.pid, r.item.id, r.item.tag, r.item.q, a.active.length, r.answered.length, ...cc,
+      statusOut, exportVal(r.item, r.final), r.resolution, r.matches.join(';'), r.note,
+      used ? r.decision.decided_at || '' : '', used ? r.decision.resolver || '' : '']);
+  }));
+  return csv([head, ...rows]);
+}
+
+function buildCoderAnswers() {
+  const textCols = ['meta_date', 'q3_notes', 'q6_other_text', 'q7_notes', 'q8_notes', 'general_notes'];
+  const head = ['coder_id', 'paper_id', 'coded', 'form_complete', 'backup_exported', ...ITEMS.map(i => i.id), 'q4_rows', ...textCols];
+  const rows = [];
+  Object.keys(state.coders).sort().forEach(cid => {
+    Object.entries(state.coders[cid].records).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).forEach(([pid, rec]) => {
+      rows.push([cid, pid, tf(isCoded(rec)), tf(isTrue(rec._complete)), rec._exported || '',
+        ...ITEMS.map(i => exportVal(i, getValue(i, rec))),
+        q4Rows(rec).map(r => `${r.source || ''} · ${r.link || ''}${r.notes ? ' · ' + r.notes : ''}`).join(' | '),
+        ...textCols.map(k => textVal(rec, k) || '')]);
+    });
+  });
+  return csv([head, ...rows]);
+}
+
+function buildCodebook() {
+  const rows = [['item', 'item_tag', 'question', 'type', 'code', 'label']];
+  ITEMS.forEach(i => {
+    if (i.options) i.options.forEach(o => rows.push([i.id, i.tag, i.q, i.type, o.code, o.label]));
+    else rows.push([i.id, i.tag, i.q, i.type, '', i.type === 'list' ? 'links separated by " | "' : 'free text']);
+  });
+  return csv(rows);
+}
+
+async function exportResults() {
+  const all = analyseAll();
+  if (!all.length) { alert('Load the coders\' backup files first.'); return; }
+  const open = all.filter(a => ['open', 'third', 'waiting'].includes(a.status)).length;
+  if (open && !confirm(`${open} paper${open !== 1 ? 's are' : ' is'} not finished yet (still to resolve, or awaiting coders). Export anyway? Their open items will be empty in the final dataset.`)) return;
+  const files = {
+    'final_dataset.csv': buildFinalDataset(all),
+    'item_level.csv': buildItemLevel(all),
+    'coder_answers.csv': buildCoderAnswers(),
+    'codebook.csv': buildCodebook(),
+    'reconciliation_progress.json': progressJson(),
+  };
+  if (typeof JSZip === 'undefined') {
+    // No ZIP library (offline): download the files one by one
+    Object.entries(files).forEach(([n, c], i) => setTimeout(() => download(n, new Blob([c], { type: n.endsWith('.csv') ? 'text/csv' : 'application/json' })), i * 400));
+    return;
+  }
+  const zip = new JSZip();
+  Object.entries(files).forEach(([n, c]) => zip.file(n, c));
+  download(`reconciliation_results_${dateStr()}.zip`, await zip.generateAsync({ type: 'blob' }));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Modals
+// ══════════════════════════════════════════════════════════════════════
+function openModal(html) { document.getElementById('modal').innerHTML = html; document.getElementById('modal-overlay').classList.add('open'); }
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function openThirdModal() {
+  const all = analyseAll();
+  const third = all.filter(a => a.status === 'third');
+  const waiting = all.filter(a => a.status === 'waiting');
+  const vec = ids => `c(${ids.map(id => `"${id}"`).join(', ')})`;
+  openModal(`<h3>Papers awaiting a third coder</h3>
+    ${third.length ? `<table class="data"><thead><tr><th>Paper</th><th>Reason</th></tr></thead><tbody>
+      ${third.map(a => `<tr><td><b>${esc(a.pid)}</b> ${esc(a.meta.paper_title || '')}</td><td class="small">${a.triggers.map(t => `${esc(t.coder)}: ${esc(t.reason)}`).join('<br>')}</td></tr>`).join('')}
+    </tbody></table>
+    <p style="margin-top:12px">To make a batch for the third coder, set these lines in <code>GENERATE_BATCH.R</code>, and set <code>run_extraction</code> to <code>FALSE</code> so the paper IDs stay the same:</p>
+    <pre id="third-r">coder_ids <- c("ThirdCoderID")\nbatch_ids <- ${vec(third.map(a => a.pid))}</pre>
+    <button class="btn" data-act="copy" data-target="third-r">Copy</button>`
+    : '<p>No papers are waiting for a third coder.</p>'}
+    ${waiting.length ? `<p style="margin-top:14px"><b>Fewer than two coders so far</b> (${waiting.length}): ${waiting.map(a => esc(a.pid)).join(', ')}</p>` : ''}
+    <div class="modal-btns"><button class="btn" data-act="close-modal">Close</button></div>`);
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Events (delegated)
+// ══════════════════════════════════════════════════════════════════════
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]');
+  if (!t) { if (e.target.id === 'modal-overlay') closeModal(); return; }
+  const act = t.dataset.act, pid = ui.paperId, itemId = t.dataset.item;
+  switch (act) {
+    case 'overview': ui.view = 'overview'; renderAll(); document.getElementById('content-area').scrollTop = 0; break;
+    case 'filter': ui.filter = t.dataset.filter; renderSidebar(); break;
+    case 'paper': ui.view = 'paper'; ui.paperId = t.dataset.pid; renderAll(); break;
+    case 'pick': setDecision(pid, itemId, t.dataset.val); break;
+    case 'toggle': {
+      const r = analysePaper(pid).items.find(x => x.item.id === itemId);
+      const cur = new Set((r.decision && r.decision.value) || []);
+      cur.has(t.dataset.val) ? cur.delete(t.dataset.val) : cur.add(t.dataset.val);
+      setDecision(pid, itemId, ITEM_BY_ID[itemId].options.map(o => o.code).filter(c => cur.has(c)));
+      break;
+    }
+    case 'use': {
+      const r = analysePaper(pid).items.find(x => x.item.id === itemId);
+      const x = r.answered.find(y => y.coder === t.dataset.coder);
+      if (x) setDecision(pid, itemId, Array.isArray(x.value) ? [...x.value] : x.value);
+      break;
+    }
+    case 'clear': delete ui.override[pid + '|' + itemId]; setDecision(pid, itemId, null); break;
+    case 'confirm': {
+      const r = analysePaper(pid).items.find(x => x.item.id === itemId);
+      if (r.decision) setDecision(pid, itemId, r.decision.value);
+      break;
+    }
+    case 'accept-singles': acceptSingles(pid); break;
+    case 'override': ui.override[pid + '|' + itemId] = true; renderAll(); break;
+    case 'cancel-override': delete ui.override[pid + '|' + itemId]; renderAll(); break;
+    case 'remove-coder':
+      if (confirm(`Remove all answers of ${t.dataset.coder}? Your decisions are kept, but items that depended on this coder's answers will need to be checked again.`)) {
+        delete state.coders[t.dataset.coder]; persist(); renderAll();
+      }
+      break;
+    case 'save-progress': saveProgress(); break;
+    case 'export': exportResults(); break;
+    case 'third-modal': openThirdModal(); break;
+    case 'close-modal': closeModal(); break;
+    case 'copy': {
+      const txt = document.getElementById(t.dataset.target).textContent;
+      navigator.clipboard && navigator.clipboard.writeText(txt).then(() => { t.textContent = 'Copied ✓'; }).catch(() => {});
+      break;
+    }
+    case 'open-img': window.open(t.dataset.src, '_blank'); break;
+    case 'reset':
+      if (confirm('Remove all loaded coder files and ALL your decisions from this browser? Save progress first if you want to keep them.')) {
+        state = { resolver_id: state.resolver_id, coders: {}, decisions: {} };
+        ui.log = []; ui.view = 'overview'; persist(); renderAll();
+      }
+      break;
+  }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.upload) {
+    const files = [...t.files];
+    t.value = '';
+    if (!files.length) return;
+    if (t.dataset.upload === 'coders') loadCoderFiles(files);
+    else if (t.dataset.upload === 'shots') loadScreenshotZips(files);
+    else if (t.dataset.upload === 'restore') restoreProgress(files[0]);
+    return;
+  }
+  const f = t.dataset.field, pid = ui.paperId, itemId = t.dataset.item;
+  if (!f) return;
+  if (f === 'resolver') { state.resolver_id = t.value.trim(); persist(); }
+  else if (f === 'text') setDecision(pid, itemId, t.value.trim());
+  else if (f === 'list') setDecision(pid, itemId, t.value.split(/\r?\n/).map(s => s.trim()).filter(Boolean));
+  else if (f === 'note') setNote(pid, itemId, t.value.trim());
+  else if (f === 'paper_note') { getDec(pid).paper_note = t.value.trim(); persist(); }
+  else if (f === 'no_third') { getDec(pid).no_third = t.checked; persist(); renderAll(); }
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+loadState();
+if (allPaperIds().length && analyseAll().some(a => a.status === 'open')) ui.filter = 'open';
+renderAll();
+</script>
+</body>
+</html>
