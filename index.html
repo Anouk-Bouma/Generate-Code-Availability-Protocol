@@ -144,18 +144,6 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 }
 #override-continue-btn:hover { background: #fff5f5; }
 
-#add-paper-btn {
-  margin: 8px; padding: 9px;
-  background: rgba(255,255,255,0.1);
-  border: 1px dashed rgba(255,255,255,0.25);
-  border-radius: 6px;
-  color: rgba(255,255,255,0.6);
-  font-size: 8.5pt; font-family: var(--sans);
-  cursor: pointer; text-align: center;
-  transition: all 0.15s;
-}
-#add-paper-btn:hover { background: rgba(255,255,255,0.18); color: #fff; }
-
 /* ── Sidebar toggle button ───────────────────────────────────────── */
 #sidebar-toggle {
   background: none; border: none; cursor: pointer;
@@ -170,7 +158,6 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 #sidebar.collapsed .title,
 #sidebar.collapsed .subtitle,
 #sidebar.collapsed #paper-list-header,
-#sidebar.collapsed #add-paper-btn,
 #sidebar.collapsed .paper-label,
 #sidebar.collapsed .paper-num { display: none; }
 #sidebar.collapsed .paper-item { padding: 5px 0; justify-content: center; gap: 0; border-radius: 0; }
@@ -180,7 +167,7 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
   #sidebar { width: 36px; }
   #sidebar #sidebar-header { padding: 10px 0 8px; align-items: center; justify-content: center; }
   #sidebar .title, #sidebar .subtitle,
-  #sidebar #paper-list-header, #sidebar #add-paper-btn,
+  #sidebar #paper-list-header,
   #sidebar .paper-label, #sidebar .paper-num { display: none; }
   #sidebar .paper-item { padding: 5px 0; justify-content: center; gap: 0; border-radius: 0; }
   #sidebar #sidebar-toggle { align-self: center; }
@@ -568,34 +555,6 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 #empty-state h3 { font-family: var(--serif); font-size: 16pt; color: var(--ink-mid); margin-bottom: 8px; }
 #empty-state p { font-size: 10pt; max-width: 360px; line-height: 1.6; }
 
-/* Add paper modal */
-#modal-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(0,0,0,0.45); z-index: 100;
-  align-items: center; justify-content: center;
-}
-#modal-overlay.open { display: flex; }
-#modal {
-  background: #fff; border-radius: 8px; padding: 28px;
-  width: 420px; box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-}
-#modal h3 { font-family: var(--serif); font-size: 14pt; color: var(--accent); margin-bottom: 16px; }
-#modal label { display: block; font-size: 8.5pt; font-weight: 600; color: var(--ink-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-#modal input {
-  width: 100%; padding: 9px 12px;
-  border: 1.5px solid var(--border); border-radius: 5px;
-  font-family: var(--sans); font-size: 10pt; color: var(--ink); margin-bottom: 14px;
-}
-#modal input:focus { outline: none; border-color: var(--accent-mid); }
-.modal-btns { display: flex; gap: 10px; justify-content: flex-end; margin-top: 6px; }
-.modal-btn {
-  padding: 8px 18px; border-radius: 5px; border: none;
-  font-family: var(--sans); font-size: 9pt; font-weight: 600; cursor: pointer;
-}
-.modal-btn.cancel { background: #f0f0ee; color: var(--ink-mid); }
-.modal-btn.confirm { background: var(--accent); color: #fff; }
-.modal-btn.confirm:hover { background: var(--accent-mid); }
-
 code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding: 1px 5px; border-radius: 2px; color: var(--accent); }
 
 /* ── Login overlay ───────────────────────────────────────────────── */
@@ -703,7 +662,6 @@ code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding:
     </div>
     <div id="paper-list-header">Papers</div>
     <div id="paper-list"></div>
-    <button id="add-paper-btn">+ Add paper</button>
   </div>
 
   <!-- ── Main ────────────────────────────────────────────────────── -->
@@ -746,21 +704,6 @@ code { font-family: var(--mono); font-size: 8.5pt; background: #ededea; padding:
     </div> <!-- /#work-area -->
   </div> <!-- /#main -->
 </div> <!-- /#app -->
-
-<!-- ── Add paper modal ────────────────────────────────────────────── -->
-<div id="modal-overlay">
-  <div id="modal">
-    <h3>Add New Paper</h3>
-    <label>Paper ID / Batch Number</label>
-    <input id="modal-id" placeholder="e.g. P001" />
-    <label>Short title (for sidebar)</label>
-    <input id="modal-title" placeholder="e.g. Smith et al. (2021)" />
-    <div class="modal-btns">
-      <button class="modal-btn cancel" id="modal-cancel">Cancel</button>
-      <button class="modal-btn confirm" id="modal-confirm">Add Paper</button>
-    </div>
-  </div>
-</div>
 
 <script>
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
@@ -1280,32 +1223,6 @@ function showSavedIndicator() {
 // Download backup button
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 document.getElementById('download-btn').addEventListener('click', downloadBackup);
-
-// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-// Add paper modal
-// �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
-document.getElementById('add-paper-btn').addEventListener('click', () => {
-  document.getElementById('modal-id').value = `P${String(papers.length + 1).padStart(3,'0')}`;
-  document.getElementById('modal-title').value = '';
-  document.getElementById('modal-overlay').classList.add('open');
-  document.getElementById('modal-title').focus();
-});
-document.getElementById('modal-cancel').addEventListener('click', closeModal);
-document.getElementById('modal-overlay').addEventListener('click', e => { if (e.target === e.currentTarget) closeModal(); });
-document.getElementById('modal-confirm').addEventListener('click', () => {
-  const id = document.getElementById('modal-id').value.trim();
-  const title = document.getElementById('modal-title').value.trim() || id;
-  if (!id) return;
-  if (papers.find(p => p.id === id)) { alert('Paper ID already exists.'); return; }
-  papers.push({ id, title });
-  savePapers();
-  closeModal();
-  renderSidebar();
-  selectPaper(id);
-});
-document.getElementById('modal-id').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modal-confirm').click(); });
-document.getElementById('modal-title').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('modal-confirm').click(); });
-function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
 
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 // Form builder helpers
