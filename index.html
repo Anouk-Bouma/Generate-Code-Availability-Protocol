@@ -468,6 +468,18 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
 }
 .cb-option .opt-text { flex: 1; font-size: 9pt; color: var(--ink); line-height: 1.4; }
 
+/* "I completed all steps in this section" button that ends Section 1A */
+.sec-done { margin: 14px 0 6px; }
+.cb-option.sec-done-btn {
+  justify-content: center; padding: 12px;
+  background: var(--accent); border-color: var(--accent); border-radius: 8px;
+}
+.cb-option.sec-done-btn:hover { background: var(--accent-mid); border-color: var(--accent-mid); }
+.cb-option.sec-done-btn input[type="checkbox"] { display: none; }
+.cb-option.sec-done-btn .opt-text { flex: none; color: #fff; font-size: 10pt; font-weight: 600; }
+.cb-option.sec-done-btn.selected { background: var(--accent-pale); border-color: var(--accent-mid); cursor: default; }
+.cb-option.sec-done-btn.selected .opt-text { color: var(--accent); }
+
 /* text input question */
 .q-input {
   width: 100%; padding: 9px 12px;
@@ -815,10 +827,34 @@ function migrateV2(data) {
   });
   return out;
 }
+// Version 3: Q1 asked whether any supplementary materials were available
+// (q1_yes / q1_no / q1_paywall). That question was removed and the keys were
+// kept, so the question numbers shown now lag one behind the keys: q2_* is
+// shown as Q1 (code available, now with a paywall option), q3_* as Q2, …,
+// q8_* as Q7. q1_yes is now the "I completed all steps in this section"
+// button that ends Section 1A. An old "No" becomes code "No" (the Q8 reasons
+// stay valid) and an old paywall answer becomes the code question's paywall
+// option.
+const V3_KEY_RE = /^q1_(no|paywall)$/;
+function migrateV3(data) {
+  const out = { ...data };
+  const wasNo = out.q1_no === true || out.q1_no === 'true';
+  const wasPaywall = out.q1_paywall === true || out.q1_paywall === 'true';
+  delete out.q1_no;
+  delete out.q1_paywall;
+  if (wasNo || wasPaywall) {
+    out.q1_yes = true;
+    out.q2_yes = false;
+    out.q2_no = wasNo;
+    out.q2_paywall = wasPaywall;
+  }
+  return out;
+}
 function migrateOldKeys(data) {
   if (!data) return data;
   if (Object.keys(data).some(k => V1_KEY_RE.test(k))) data = migrateV1(data);
   if (Object.keys(data).some(k => V2_KEY_RE.test(k))) data = migrateV2(data);
+  if (Object.keys(data).some(k => V3_KEY_RE.test(k))) data = migrateV3(data);
   return data;
 }
 
@@ -852,11 +888,25 @@ document.getElementById('login-coder-id').addEventListener('keydown', e => {
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
 // Backup — download JSON / restore from JSON
 // �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?
+// In Chrome and Edge the coder picks the folder to save the backup in, every
+// time; other browsers save to the Downloads folder as before.
 async function downloadBackup() {
   flushSave();
   const dateStr = new Date().toISOString().slice(0, 10);
   // Used in file names, so strip characters that aren't allowed there
   const coderStr = (activeCoderId || 'coder').replace(/[\\/:*?"<>|\s]+/g, '_');
+
+  // The folder picker must open straight from the click, before any await
+  let dir = null;
+  if (window.showDirectoryPicker) {
+    try {
+      dir = await window.showDirectoryPicker({ id: 'protocol-backup', mode: 'readwrite', startIn: 'documents' });
+    } catch (e) {
+      if (e.name === 'AbortError') alert('Backup not saved: no folder was selected.');
+      else alert(`Backup not saved: ${e.message}`);
+      return;
+    }
+  }
 
   // ── 1. JSON backup (no screenshots) ──────────────────────────────
   const records = papers.map(p => {
@@ -864,31 +914,46 @@ async function downloadBackup() {
     return { coder_id: activeCoderId || '', paper_id: p.id, paper_title: p.title, ...rest };
   });
   const backup = { coder_id: activeCoderId || '', exported: new Date().toISOString(), papers, records };
-  const jsonBlob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-  const jsonUrl = URL.createObjectURL(jsonBlob);
-  const jsonLink = document.createElement('a');
-  jsonLink.href = jsonUrl;
-  jsonLink.download = `backup_${coderStr}_${dateStr}.json`;
-  jsonLink.click();
-  URL.revokeObjectURL(jsonUrl);
+  const files = [{
+    name: `backup_${coderStr}_${dateStr}.json`,
+    blob: new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }),
+  }];
 
   // ── 2. Screenshots ZIP (only if any screenshots exist) ───────────
   const papersWithScreenshots = papers.filter(p => loadData(p.id)._screenshot);
-  if (papersWithScreenshots.length === 0) return;
+  if (papersWithScreenshots.length > 0) {
+    const zip = new JSZip();
+    papersWithScreenshots.forEach(p => {
+      const src = loadData(p.id)._screenshot;
+      const ext = (src.match(/data:image\/(\w+);base64,/) || [])[1] || 'png';
+      zip.file(`${p.id}_${coderStr}_ITR_screenshot.${ext}`, src.split(',')[1], { base64: true });
+    });
+    files.push({ name: `screenshots_${coderStr}_${dateStr}.zip`, blob: await zip.generateAsync({ type: 'blob' }) });
+  }
 
-  const zip = new JSZip();
-  papersWithScreenshots.forEach(p => {
-    const src = loadData(p.id)._screenshot;
-    const ext = (src.match(/data:image\/(\w+);base64,/) || [])[1] || 'png';
-    zip.file(`${p.id}_${coderStr}_ITR_screenshot.${ext}`, src.split(',')[1], { base64: true });
-  });
+  if (!dir) {
+    files.forEach((f, i) => setTimeout(() => {
+      const url = URL.createObjectURL(f.blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = f.name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, i * 300));
+    return;
+  }
 
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
-  const zipUrl = URL.createObjectURL(zipBlob);
-  const zipLink = document.createElement('a');
-  zipLink.href = zipUrl;
-  zipLink.download = `screenshots_${coderStr}_${dateStr}.zip`;
-  setTimeout(() => { zipLink.click(); URL.revokeObjectURL(zipUrl); }, 300);
+  try {
+    for (const f of files) {
+      const handle = await dir.getFileHandle(f.name, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(f.blob);
+      await writable.close();
+    }
+    alert(`Backup saved in the folder "${dir.name}":\n${files.map(f => f.name).join('\n')}`);
+  } catch (e) {
+    alert(`Backup not saved in "${dir.name}" (${e.message}). Please try again and choose another folder.`);
+  }
 }
 
 function restoreFromBackup(input) {
@@ -1129,9 +1194,9 @@ function flushSave() {
 }
 
 // Answers to questions that the routing currently hides no longer apply (e.g.
-// Q3–Q7 after Q2 is changed to "No"), so they are cleared and the saved data
+// README to languages after the code question is changed to "No"), so they are cleared and the saved data
 // only holds answers the coder can see. Clearing one answer can hide further
-// sections (clearing Q5 hides Section 3), so repeat until nothing changes.
+// sections (clearing the sufficiency answer hides Section 3), so repeat until nothing changes.
 function clearHiddenAnswers(form) {
   for (let pass = 0; pass < 10; pass++) {
     let changed = false;
@@ -1334,14 +1399,31 @@ function handleCbChange(el) {
   triggerSave();
 }
 
+// The button that ends Section 1A works one way only: clicking it again would
+// hide Section 1B and clear every answer after it.
+function completeSection1A(el) {
+  if (!el.checked) { el.checked = true; return; }
+  handleCbChange(el);
+  document.getElementById('sec1b_block')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function updateSection1ADone(done) {
+  const text = document.querySelector('#opt_q1_yes .opt-text');
+  if (text) text.textContent = done
+    ? '✓ Section 1A completed'
+    : 'I completed all steps in this section, go to next section';
+}
+
 // The green "Phase 1 complete" marker sits at the end of every route through
-// the protocol (Q1 = paywall, 2B, Q5 = insufficient or unable to open, ITR
-// recorded, no ITR found). It is shown only once every required question on the current route
-// is answered, and the paper's tick in the sidebar (_complete) always matches it.
+// the protocol (code question = paywall, 2B, sufficiency = insufficient or
+// unable to open, ITR recorded, no ITR found). It is shown only once every
+// required question on the current route is answered, and the paper's tick in
+// the sidebar (_complete) always matches it. (Keys lag one behind the question
+// numbers shown: q2_* is Q1, q5_* is Q4, etc.; see migrateV3.)
 function updateCompletion() {
   if (!activePaperId) return;
   const done = isFormComplete();
-  toggleSection('end_paywall_q1', done && isChecked('q1_paywall'));
+  toggleSection('end_paywall', done && isChecked('q2_paywall'));
   toggleSection('end_2b', done);
   toggleSection('end_2a', done && (isChecked('q5_ci') || isChecked('q5_un')));
   toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
@@ -1353,28 +1435,28 @@ function updateCompletion() {
 }
 
 function updateRouting() {
-  // Q1 (supplementary materials available?) → Yes: Section 1B; No: straight to
-  // 2B; paywall: protocol ends
+  // Keys lag one behind the question numbers shown (see migrateV3).
+  // "I completed all steps in this section" button (q1_yes) → Section 1B
   const q1yes = isChecked('q1_yes');
-  const q1no  = isChecked('q1_no');
   toggleSection('sec1b_block', q1yes);
+  updateSection1ADone(q1yes);
 
-  // Q2 (code available?) → Yes: Q3 + Q4, then 2A; No: 2B
+  // Q1 shown (q2, code available?) → Yes: README + location, then 2A; No: 2B;
+  // paywall: protocol ends
   const q2yes = q1yes && isChecked('q2_yes');
   const q2no  = q1yes && isChecked('q2_no');
   toggleSection('q3_block', q2yes);
   toggleSection('q4_block', q2yes);
-  toggleSection('sec2_block', q2yes || q2no || q1no);
+  toggleSection('sec2_block', q2yes || q2no);
   toggleSection('sec2a_block', q2yes);
-  toggleSection('sec2b_block', q2no || q1no);
+  toggleSection('sec2b_block', q2no);
 
-  // Q5 sufficiency → potentially sufficient / unsure: Q7 languages + Section 3;
-  // unable to open: Q7 languages, then end; unambiguously insufficient: Q6
-  // (why), then end
+  // Q6 shown (q7, languages) is asked whenever Section 2A is shown.
+  // Q4 shown (q5, sufficiency) → potentially sufficient / unsure: Section 3;
+  // unable to open: end; unambiguously insufficient: why insufficient, then end
   const q5ps     = isChecked('q5_ps');
   const q5unsure = isChecked('q5_unsure');
-  const q5un     = isChecked('q5_un');
-  toggleSection('q7_block', q5ps || q5unsure || q5un);
+  toggleSection('q7_block', q2yes);
   toggleSection('sec3_block', q5ps || q5unsure);
 
   // Q — ITR in main paper → show 3C (no) or 3B (yes)
@@ -1391,10 +1473,11 @@ function updateRouting() {
   // Link to supplement only relevant if the ITR was found in the supplement
   toggleSection('itr_supp_link_block', qItrSuppYes);
 
-  // Q7 "Other" language → show open answer field
+  // Q6 shown (q7) "Other" language → show open answer field
   toggleSection('q7_other_block', isChecked('q7_other'));
 
-  // Q5 = unambiguously insufficient → Q6 (why); Q6 "Other" → description field
+  // Q4 shown (q5) = unambiguously insufficient → Q5 shown (q6, why);
+  // "Other" → description field
   toggleSection('q6_block', isChecked('q5_ci'));
   toggleSection('q6_other_block', isChecked('q6_other'));
 
@@ -1510,6 +1593,8 @@ function validateForm() {
     if (qHeader) return qHeader.textContent.trim();
     const metaLabel = el.closest('.meta-field')?.querySelector('label');
     if (metaLabel) return metaLabel.textContent.trim();
+    const dataLabel = el.closest('[data-label]');
+    if (dataLabel) return dataLabel.dataset.label;
     return null;
   }
 
@@ -1538,24 +1623,25 @@ function validateForm() {
   // Metadata
   requireInput('meta_date');
 
-  // Q1
+  // Keys lag one behind the question numbers shown (see migrateV3).
+  // Section 1A button
   requireGroup('q1');
 
-  // Q2 (sec1b_block)
+  // Q1 (code available?), sec1b_block
   requireGroup('q2');
 
-  // Q3 (README) and Q4 (location), sec1b_block
+  // Q2 (README) and Q3 (location), sec1b_block
   requireGroup('q3');
   requireInput('q4_source_0');
   requireInput('q4_link_0');
 
-  // Q5, Q6 (why insufficient) and Q7 (languages), sec2a_block
+  // Q4 (sufficiency), Q5 (why insufficient) and Q6 (languages), sec2a_block
   requireGroup('q5');
   requireGroup('q6');
   requireInput('q6_other_text');
   requireGroup('q7_langs');
 
-  // Q8 (sec2b_block)
+  // Q7 (why unavailable), sec2b_block
   requireGroup('q8');
 
   // Section 3
@@ -1643,14 +1729,14 @@ function buildForm(paperId) {
     ${secHeader('Section 1', 'Find Code')}
 
     ${instr('Read instructions for Section 1',
-      `<p>The goal of this protocol is to identify whether the code that may potentially be relevant to computationally reproduce the simulations in the paper is openly available. The steps in this protocol are extensive, meaning that you might not need to take all steps to find the necessary code for all papers in your batch.</p>
+      `<p>The goal of this protocol is to identify whether the code that may potentially be relevant to computationally reproduce the simulations in the paper is openly available.</p>
       <div class="callout warn">
         <span class="callout-label">⬛ Stopping Criterion</span>
-        The following stopping criterion may be applied in Section 1 (i.e., both in Section 1A and Section 1B). In the following case, you may stop searching for materials or code and immediately answer Q1 and Q2 (which completes Sections 1A and 1B):
+        The following stopping criterion holds in Section 1 (i.e., both in Section 1A and Section 1B). You can stop searching for code and immediately answer Q1 (click the button at the end of Section 1A to go to Q1) if...
         <ul style="margin-top:6px">
-          <li>If the paper unambiguously identifies the location where the authors aimed to store all code needed to reproduce the results for the simulations in the paper (even if the code turns out to be unavailable at that location).</li>
+          <li>...the paper unambiguously identifies the location where the authors aimed to store all code needed to reproduce the results for the simulations in the paper (even if the code is unavailable at that location).</li>
         </ul>
-        <p style="margin-top:8px"><strong>Examples of paper excerpts for which the stopping criterion may be applied:</strong></p>
+        <p style="margin-top:8px"><strong>Some examples of paper excerpts for which the stopping criterion may be applied:</strong></p>
         <ul style="margin-top:4px">
           <li><em>"All the scripts for the simulations and analysis are available at the following link: https://osf.io/9dpgn/overview."</em></li>
           <li><em>"The computer code for the simulations is available on the OSF platform (https://osf.io/mpfzu/)."</em></li>
@@ -1661,37 +1747,37 @@ function buildForm(paperId) {
     ${secHeader('Section 1A', 'Identify All Supplementary Materials')}
 
     ${instr('Read instructions for Section 1A',
-      `<p>By the end of this section you should have... </p>
+      `<p>By the end of Section 1A you should have... </p>
         <ul>
-          <li>...answered Q1 ("Are any supplementary materials available?")</li>
           <li>...opened all locations where supplementary materials may be stored, so you are ready for the next section</li>
         </ul>
-        <p>Your answer to Q1 determines whether you proceed to Section 1B or Section 2B.</p>
-      <p>You may answer Q1 when you have worked through all steps below, or as soon as the stopping criterion is met.</p>
       <div class="callout info">
         <span class="callout-label">ℹ Note</span>
-        You do not need to open or evaluate the content of any materials at this stage. You DO need to follow any links or descriptions to locate where materials are hosted. Do not focus solely on code yet. We first aim to identify if ANY supplementary materials are shared (code or other types). Code included in the paper PDF itself (e.g., in an appendix) also counts.
+        You do not need to open or evaluate the content of any materials at this stage. You DO need to follow any links or descriptions to locate where materials are hosted. Do not focus on code yet. We first aim to identify if ANY supplementary materials are shared (code or other types). Code included in the paper PDF itself (e.g., in an appendix) also counts.
       </div>`
     )}
 
     ${instr('Step 1A.1) Evaluate links in the Links and Keywords Report',
-      `<p>For any link identified in the Links and Keywords Report, read the context and evaluate whether the link may contain any supplementary materials (e.g., code, data, appendices).</p>
+      `<p>For any link identified in the Links and Keywords Report, read the context and evaluate whether the link may contain any supplementary materials.</p>
       <ol type="1">
-        <li>For any link that may contain supplementary materials (e.g., code, data, appendices), click the link to check if materials are available at the linked location. (You do not have to open any materials yet.)</li>
+        <li>For any link that may contain supplementary materials, click the link to check if materials are available at the linked location. (You do not have to open any materials yet.)</li>
       </ol>
       <div class="callout info">
         <span class="callout-label">ℹ Notes</span>
         <p>If the paper links to the paper DOI and describes that supplementary materials are shared at the website of the journal, please follow this link and identify the shared supplements at the journal webpage. If these supplements are behind a paywall that you cannot access through your institution, answer Q1 with the third option ("I am unable to access the journal website or the supplementary materials shared there because of a paywall").</p>
         <p>Links to OSF may not always work well at the first click. If you are redirected to the wrong OSF page (often the login page), please try clicking the link again.</p>
-        <p>Links in the Links and Keywords Report are extracted automatically from the PDF and are not always shown perfectly (e.g., a link may be cut off, contain extra characters or spaces, or be merged with surrounding text). If a link gives an error, check the link in the paper PDF and correct it before concluding that the materials are unavailable.</p>
+        <p>Links in the Links and Keywords Report are extracted automatically from the PDF and are not always shown perfectly (e.g., a link may be cut off, contain extra characters or spaces, or be merged with surrounding text). If a link gives an error, check the link in the paper PDF before concluding that the materials are unavailable.</p>
       </div>`
     )}
 
     ${instr('Step 1A.2) Evaluate keyword matches and check the journal website',
-      `<p>Evaluate whether any keywords that signal the sharing of supplementary materials (e.g., code, data, appendices) are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
+      `<p>Evaluate whether any keywords that signal the sharing of supplementary materials are identified in the paper by looking at the "Keyword Matches" section of the Links and Keywords Report. Click the arrow next to a keyword to show the list of instances in which the keyword was found in the paper. Evaluate them as follows:</p>
       <ol type="1">
-        <li>Check if there is any keyword context in which the availability of supplementary materials (e.g., code, data, appendices) is described. If so, use the description to locate these materials.</li>
-        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. Doing an automatic search for <code>supplement</code> may help. If you cannot access the article page or its supplements because of a paywall (also not through your institution), answer Q1 with the third option ("I am unable to access the journal website or the supplementary materials shared there because of a paywall").</li>
+        <li>Check if there is any keyword context in which the availability of supplementary materials is described. If so, use the description to locate these materials.</li>
+      </ol>
+      <p>If the stopping criterion is not reached:</p>
+      <ol type="1" start="2">
+        <li>Open the link to the article on the journal website and check if there are any supplements shared by the journal. If you cannot access the article page or its supplements because of a paywall (also not through your institution), answer Q1 with the third option ("I am unable to access the journal website or the supplementary materials shared there because of a paywall").</li>
       </ol>`
     )}
 
@@ -1702,44 +1788,12 @@ function buildForm(paperId) {
       </ol>`
     )}
 
-    ${instr('How to choose your answer in Q1',
-      `<div class="callout green">
-        <span class="callout-label">✔ Yes</span>
-        Select this if any supplementary materials (e.g., code, data) are available and you are able to access them. This includes materials that are behind a paywall but that you can access through your institution. If a paywall prevented you from checking the journal website, select the third option instead.
-      </div>
-      <div class="callout warn">
-        <span class="callout-label">✖ No</span>
-        Select this if no supplementary materials are shared, or if materials are mentioned but cannot be accessed, for example because:
-        <ul>
-          <li>the link is broken;</li>
-          <li>the location is empty;</li>
-          <li>materials are only available upon request;</li>
-          <li>materials are only available with restricted access.</li>
-        </ul>
-        <p style="margin-top:6px">You will indicate the reason in Q8.</p>
-      </div>
-      <div class="callout grey">
-        <span class="callout-label">⊘ I am unable to access the journal website or the supplementary materials shared there because of a paywall</span>
-        Select this if one of the following applies, and you cannot get access through your institution either:
-        <ul>
-          <li>the stopping criterion has not been met, so you need to check the journal website for supplementary materials (Step 1A.2), but you cannot access the article page or its supplements because of a paywall;</li>
-          <li>the paper or the Links and Keywords Report indicates that supplementary materials are shared on the journal website, but you cannot access them (or some of them) because of a paywall.</li>
-        </ul>
-        <p style="margin-top:6px">Please note that this also applies if you found other supplementary materials elsewhere (e.g., on OSF) but the stopping criterion has not been met yet.</p>
-        <p style="margin-top:6px">The paper will then be assessed by an additional coder. This option is not meant to record how many papers have openly accessible materials: if your institution has access, please assess the paper.</p>
-      </div>`
-    )}
-
-    ${qBlock('Q1', 'Are any supplementary materials available?',
-      `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">Note that "appendix" and "supplementary materials" are sometimes used interchangeably. For this protocol, supplementary materials means any materials not included in the main paper PDF and therefore shared separately. <strong>Exception:</strong> if the paper PDF itself contains code (e.g., in an appendix), also answer "Yes".</p>
-      ${cbOptions('q1', [
-        { text: 'Yes', value: 'yes' },
-        { text: 'No', value: 'no' },
-        { text: 'I am unable to access the journal website or the supplementary materials shared there because of a paywall', value: 'paywall' },
-      ])}`
-    )}
-
-    ${condSection('end_paywall_q1', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
+    <div class="cb-options sec-done" data-label="Section 1A">
+      <label class="cb-option sec-done-btn" id="opt_q1_yes">
+        <input type="checkbox" data-key="q1_yes" data-group="q1" data-value="yes" onchange="completeSection1A(this)">
+        <span class="opt-text">I completed all steps in this section, go to next section</span>
+      </label>
+    </div>
 
     <!-- �?�? SECTION 1B �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
     ${condSection('sec1b_block', `
@@ -1748,12 +1802,12 @@ function buildForm(paperId) {
       ${instr('Read instructions for Section 1B',
         `<p>By the end of this section you should have...</p>
         <ul>
-           <li>...answered Q2 ("Is any code available?")</li>
-           <li>...answered Q3 (README) and Q4 (location of the code), if code is available</li>
+           <li>...answered Q1 ("Is any code available?")</li>
+           <li>...answered Q2 (README) and Q3 (location of the code), if code is available</li>
            <li>...opened any supplementary materials that may contain code.</li>
         </ul>
-        <p>In this step, we evaluate whether <u>any</u> code is available within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code is available in Q2. The relevance of the code will be evaluated in a later step.</p>
-        <p>Work through the steps below to answer Q2. You may answer Q2 if you worked through all steps below, or as soon as the stopping criterion is met.</p>
+        <p>In this step, we evaluate whether <u>any</u> code is available within the materials identified in the previous step. It is not necessary to evaluate the usefulness of the code yet. Even if you find code that is clearly insufficient or unrelated to the simulations in the paper, you should still indicate that code is available in Q1. The relevance of the code will be evaluated in a later step.</p>
+        <p>Work through the steps below to answer Q1. Answer Q1 if you worked through all steps below, or as soon as the stopping criterion is met.</p>
         <p>Code may be shared in a code file but is sometimes also available as text in a <code>.docx</code>, <code>.txt</code>, <code>.pdf</code>, or other type of file.</p>`
       )}
 
@@ -1791,10 +1845,10 @@ function buildForm(paperId) {
         </ol>`
       )}
 
-      ${instr('How to choose your answer in Q2',
+      ${instr('How to choose your answer in Q1',
         `<div class="callout green">
           <span class="callout-label">✔ Yes</span>
-          Select this if any code is available and you are able to access it, even if the code seems insufficient or unrelated to the simulations (its relevance is evaluated in Q5). This includes code that is behind a paywall but that you can access through your institution.
+          Select this if any code is available and you are able to access it, even if the code seems insufficient or unrelated to the simulations (its relevance is evaluated in Q4). This includes code that is behind a paywall but that you can access through your institution.
         </div>
         <div class="callout warn">
           <span class="callout-label">✖ No</span>
@@ -1803,18 +1857,30 @@ function buildForm(paperId) {
             <li>the link is broken;</li>
             <li>the repository is empty or contains no code;</li>
             <li>code is only available upon request;</li>
-            <li>code is only available with restricted access.</li>
           </ul>
-          <p style="margin-top:6px">You will indicate the reason in Q8.</p>
+          <p style="margin-top:6px">You will indicate the reason in Q7.</p>
+        </div>
+        <div class="callout grey">
+          <span class="callout-label">⊘ I am unable to access the journal website or the supplementary materials shared there because of a paywall</span>
+          Select this if one of the following applies, and you cannot get access through your institution either:
+          <ul>
+            <li>the stopping criterion has not been met, so you need to check the journal website for supplementary materials (Step 1A.2), but you cannot access the article page or its supplements because of a paywall;</li>
+            <li>the paper or the Links and Keywords Report indicates that supplementary materials are shared on the journal website, but you cannot access them (or some of them) because of a paywall.</li>
+          </ul>
+          <p style="margin-top:6px">Please note that if the stopping criterion has not been met, you need to select this option whenever a paywall prevents you from accessing the full paper or its supplements, even if you have already found supplementary materials elsewhere (e.g., on OSF).</p>
+          <p style="margin-top:6px">The paper will then be assessed by an additional coder. This option is <u>not</u> meant to record how many papers have openly accessible materials: <u>if your institution has access, please assess the paper</u>.</p>
         </div>`
       )}
 
-      ${qBlock('Q2', 'Is any code available?',
+      ${qBlock('Q1', 'Is any code available?',
         cbOptions('q2', [
           { text: 'Yes', value: 'yes' },
           { text: 'No', value: 'no' },
+          { text: 'I am unable to access the journal website or the supplementary materials shared there because of a paywall', value: 'paywall' },
         ])
       )}
+
+      ${condSection('end_paywall', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
 
       ${condSection('q3_block', `
         ${instr('How to identify a README file',
@@ -1841,7 +1907,39 @@ function buildForm(paperId) {
           </ul>`
         )}
 
-        ${qBlock('Q3', 'Is a README or similar file provided with the code?',
+        ${instr('How to choose your answer in Q2',
+          `<div class="callout green">
+            <span class="callout-label">✔ Yes</span>
+            Select this if the authors shared a README or a file that serves the same purpose. The file does not have to be in the top-level folder: a README somewhere else (e.g., in a subfolder) also counts.
+            <ul>
+              <li>A file called README (or ReadMe, readme, etc.) counts as long as it has some content.</li>
+              <li>A file with a different name (see the alternative names under "How to identify a README file" above) counts if it contains at least one of the following:
+                <ul>
+                  <li>instructions on how to run the simulation code;</li>
+                  <li>a description of the files in the folder and/or of the folder structure;</li>
+                  <li>information about the simulation code that is relevant for reproducers (e.g., runtime, dependencies or the computational environment);</li>
+                  <li>a general description of the simulation study that is intended to help make sense of the code.</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
+          <div class="callout warn">
+            <span class="callout-label">✖ No</span>
+            Select this if no file with the function of a README was shared with the code, for example:
+            <ul>
+              <li>only code files (and possibly data files) are shared, without a file that explains them;</li>
+              <li>the code is only explained in comments inside the code files;</li>
+              <li>the code is only described in the paper itself;</li>
+              <li>a README file is present but it is empty (e.g., when a README is added automatically to a GitHub repository but has no content).</li>
+            </ul>
+          </div>
+          <div class="callout yellow">
+            <span class="callout-label">? I am not sure</span>
+            Select this if you found a file with a different name that might serve as a README, but you cannot tell whether it contains any of the elements listed under "Yes". Explain your doubt in the Notes box.
+          </div>`
+        )}
+
+        ${qBlock('Q2', 'Is a README or similar file provided with the code?',
           cbOptions('q3', [
             { text: 'Yes', value: 'yes' },
             { text: 'No', value: 'no' },
@@ -1856,7 +1954,7 @@ function buildForm(paperId) {
 
       ${condSection('q4_block', `
         ${instr('How to determine code location and links',
-          `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If the code is printed in the article itself (e.g., in an appendix of the paper PDF), select "In article PDF". If unsure, note this in the Notes box.</p>
+          `<p>Indicate whether the code is directly downloadable from the journal website or if the code can be found linked at another website (external repository). Any supplement that is not directly downloadable on the journal website should be classified as being available on an external repository. If the code is printed in the article itself (e.g., in an appendix of the paper PDF), select "In article PDF". If the code was hard to find, you can add details in the Notes box to help locate it later (e.g., when resolving coder discrepancies).</p>
           <p>Please provide the most specific link to the code possible:</p>
           <ul>
             <li>If the code is in a repository, link to the specific folder or file rather than the repository's main page.</li>
@@ -1865,7 +1963,7 @@ function buildForm(paperId) {
           </ul>`
         )}
 
-        ${qBlock('Q4', 'Location of the code',
+        ${qBlock('Q3', 'Location of the code',
           `<p style="font-size:9pt;color:var(--ink-muted);margin-bottom:10px;">If code is available in multiple locations, use the + button to add extra rows.</p>
           <div id="q4-locations">
             <div class="q4-row" style="margin-bottom:12px;">
@@ -1909,17 +2007,17 @@ function buildForm(paperId) {
       ${instr('Read instructions for Section 2A',
         `<p>By the end of this section you should have...</p>
         <ul>
-          <li>...answered Q5 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
-          <li>...answered Q6 (Why is the code unambiguously insufficient?), if you indicated in Q5 that the code is unambiguously insufficient</li>
-          <li>...answered Q7 (In which programming language(s) is the simulation code written?), if you indicated in Q5 that the code is potentially sufficient, that you are unsure, or that you are unable to open the file(s)</li>
+          <li>...answered Q4 (Is the available code potentially sufficient to reproduce the simulations in the paper?)</li>
+          <li>...answered Q5 (Why is the code unambiguously insufficient?), if you indicated in Q4 that the code is unambiguously insufficient</li>
+          <li>...answered Q6 (In which programming language(s) is the simulation code written?)</li>
         </ul>
-        <p>In this section, we want to filter out papers for which the shared code is clearly not the code for <u>the simulations</u> in the paper. We also want to know which programming language is used for the simulation code.</p>
+        <p>In this section, we want to filter out papers for which the shared code is clearly not the code for <u>the simulation results reported</u> in the paper. We also want to know which programming language the simulation code is written in.</p>
         <div class="callout info">
           <span class="callout-label">ℹ Key question</span>
           Is the shared code the code that was (potentially) used to generate (part of) the results of the simulation(s) in the paper?
           <ul>
-            <li>The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and belongs to the simulations reported in the paper, mark it as potentially sufficient, even if you notice errors that might prevent it from running.</li>
-            <li>If you notice that the shared code does not include the code used to generate the results of the simulation studies reported in the paper (even if it is simulation code), select "Unambiguously insufficient", or "I am unsure" if you suspect this but are not certain.</li>
+            <li>The goal is simply to assess whether simulation code was shared, not whether it works. If code is present and seems to belong to the simulations reported in the paper, mark it as potentially sufficient, even if you notice errors that might prevent it from running.</li>
+            <li>If you notice that the shared code does not include the code used to generate the results of the simulation studies reported in the paper (even if it is simulation code), select "Unambiguously insufficient".</li>
           </ul>
           <p style="margin-top:6px">This is meant as a quick sanity check: you do not need to check whether every condition or result in the paper is covered by the code.</p>
         </div>
@@ -1927,49 +2025,49 @@ function buildForm(paperId) {
         <ol type="1">
           <li>If a README or similar instruction is available, read through it to familiarize yourself with the context of the shared files.</li>
           <li>Open any file containing code that you found in the previous steps that may be relevant to the simulations. Files can often be inspected in online viewers in the repository where they are shared, which is enough. If no online viewer is available or it does not work, download the files to inspect them.</li>
-          <li>Scroll through the code files to see if there is any obvious indication that the code is not the simulation code.</li>
-          <li>Choose your answer to Q5 using the guide "How to choose your answer in Q5" below.</li>
+          <li>Scroll through all code files to see if there is any indication that the code is not the simulation code.</li>
+          <li>Choose your answer to Q4 using the guide "How to choose your answer in Q4" below.</li>
         </ol>`
       )}
 
-      ${instr('How to choose your answer in Q5',
+      ${instr('How to choose your answer in Q4',
         `<div class="callout green">
           <span class="callout-label">✔ Potentially sufficient (the default)</span>
           Select this if the code was potentially used to generate (part of) the results of the simulations in the paper. Select it even if the code appears incomplete or you notice errors that might prevent (part of) the code from running. Examples:
           <ul>
-            <li>A script that is partially commented out or appears incomplete, but still contains recognisable simulation logic (data-generating functions, loops over conditions, calls to statistical tests)</li>
-            <li>A collection of loosely organised files where at least one file plausibly contains simulation logic, even if the overall organisation is unclear</li>
-            <li>Code shared as text in a PDF or Word file rather than as a proper code file, but where the pasted code contains simulation logic</li>
-            <li>Code in a programming language you are unfamiliar with, in which you can still recognise simulation logic</li>
+            <li>A script that is partially commented out or appears incomplete but still contains recognisable simulation logic that is potentially related to the simulations in the paper (data-generating functions, loops over conditions, specification of number of repetitions).</li>
+            <li>A collection of loosely organised files where at least one file plausibly contains simulation logic that is potentially related to the simulations in the paper, even if the overall organisation is unclear.</li>
+            <li>Code shared as text in a PDF or Word file rather than as a proper code file, but where the pasted code contains simulation logic that is potentially related to the simulations in the paper.</li>
+            <li>Code in a programming language you are unfamiliar with, in which you can still recognise simulation logic that is potentially related to the simulations in the paper.</li>
           </ul>
         </div>
         <div class="callout warn">
           <span class="callout-label">✖ Unambiguously insufficient</span>
-          Only select this if the code is <u>clearly and unambiguously</u> not the code for the simulations in the paper. You will indicate the reason in Q6. Examples:
+          Only select this if the code is <u>clearly and unambiguously</u> not the code to generate the simulation results reported in the paper. You will indicate the reason in Q5. Examples:
           <ul>
-            <li>Code for a package that is developed in the paper, but no code for applying the package to run the simulations in the paper</li>
-            <li>Code for a completely different study or project that appears to have been shared by mistake</li>
-            <li>Simulation code that is clearly not the code to generate the results of the simulation studies reported in the paper (e.g., it simulates something unrelated to these simulation studies)</li>
-            <li>Code that exclusively relates to an empirical study in the same paper (e.g., processing survey data), with no simulation component whatsoever</li>
-            <li>Example or dummy code that is not the code for the simulations in the paper</li>
+            <li>Code for a package or statistical method that is developed in the paper, but no code for applying the package to run the simulations in the paper.</li>
+            <li>Code for a completely different study or project.</li>
+            <li>Simulation code that is clearly not the code to generate the results of the simulation studies reported in the paper (e.g., it simulates something unrelated to these simulation studies).</li>
+            <li>Code that exclusively relates to an empirical study in the same paper (e.g., processing survey data).</li>
+            <li>Example or dummy code that demonstrates the design of the simulations but that is in itself not the code for the simulations in the paper.</li>
           </ul>
         </div>
         <div class="callout yellow">
           <span class="callout-label">? I am unsure</span>
           Only select this if:
           <ul>
-            <li>you see a reason to suspect that the shared code is not the code to generate the results of the simulation studies reported in the paper, but you are not certain enough to indicate the code as unambiguously insufficient; <strong>or</strong></li>
-            <li>the code is written in a programming language you are unfamiliar with, and you cannot interpret it well enough to judge whether it belongs to the simulations in the paper.</li>
+            <li>the code is written in a programming language you are unfamiliar with, and you cannot interpret it well enough to judge whether it belongs to the simulations in the paper; <strong>or</strong></li>
+            <li>you have a clear reason to suspect that the shared code is not the code to generate the results of the simulation studies reported in the paper, but you are not certain enough to indicate the code as unambiguously insufficient. If you can, please decide on code sufficiency yourself. Only use this option in rare cases where a decision is very difficult.</li>
           </ul>
           <p style="margin-top:6px">If neither applies, select potentially sufficient.</p>
         </div>
         <div class="callout grey">
           <span class="callout-label">⊘ Unable to open file(s)</span>
-          Select this if you cannot open a relevant file, even after downloading it (e.g., because no software is available to open its file type). In this case, indicate the programming language in Q7 (based on the file extension, or select "Unclear") and continue to the next paper. A third coder will review the code for this paper.
+          Select this if you cannot open a relevant file with code, even after downloading it (e.g., because no software is available to open its file type). In this case, indicate the programming language in Q6 (based on the file extension, or select "Unsure") and continue to the next paper. A third coder will review the code for this paper.
         </div>`
       )}
 
-      ${qBlock('Q5', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
+      ${qBlock('Q4', 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?',
         cbOptions('q5', [
           { text: 'Potentially sufficient', value: 'ps' },
           { text: 'Unambiguously insufficient', value: 'ci' },
@@ -1979,10 +2077,11 @@ function buildForm(paperId) {
       )}
 
       ${condSection('q6_block', `
-        ${qBlock('Q6', 'Indicate why the code is unambiguously insufficient to computationally reproduce the simulation(s) in the paper. (select all that apply)',
+        ${qBlock('Q5', 'Indicate why the code is unambiguously insufficient to computationally reproduce the simulation(s) in the paper. (select all that apply)',
           `<div class="cb-options">
             ${[
-              ['q6_package',          'Code is a package but does not contain code to reproduce the simulation(s)'],
+              ['q6_package',          'Code is a package but does not contain code to reproduce the simulation results reported in the paper'],
+              ['q6_method',           'Code details how to implement a method but does not include code to reproduce the simulation results reported in the paper'],
               ['q6_other_part',       'Code belongs to other part of the paper (e.g., empirical example)'],
               ['q6_example',          'Code is example/dummy code but is not the code to computationally reproduce the simulation(s)'],
               ['q6_different_study',  'Code belongs to a different study or project (e.g., shared by mistake)'],
@@ -2001,7 +2100,7 @@ function buildForm(paperId) {
       `)}
 
       ${condSection('q7_block', `
-        ${qBlock('Q7', 'In which programming language(s) was the simulation conducted? (select all that apply)',
+        ${qBlock('Q6', 'In which programming language(s) was the simulation conducted? (select all that apply)',
           `<div id="q7-langs" class="cb-options">
             ${[
               ['q7_r',       'R'],
@@ -2013,7 +2112,7 @@ function buildForm(paperId) {
               ['q7_mplus',   'MPlus'],
               ['q7_c_cpp',   'C/C++'],
               ['q7_shell',   'Shell'],
-              ['q7_unclear', 'Unclear'],
+              ['q7_unclear', 'Unsure'],
               ['q7_other',   'Other'],
             ].map(([key, label]) => `
               <label class="cb-option">
@@ -2044,7 +2143,7 @@ function buildForm(paperId) {
         `<p>In this section, we aim to identify the reason for code being unavailable. Please indicate which of the following applies. Multiple reasons may apply.</p>`
       )}
 
-      ${qBlock('Q8', 'Why is code not openly available? (select all that apply)',
+      ${qBlock('Q7', 'Why is code not openly available? (select all that apply)',
         `<div class="cb-options">
           ${[
             ['q8_not_mentioned',  'Code sharing is not mentioned in the paper'],
@@ -2068,7 +2167,7 @@ function buildForm(paperId) {
       ${condSection('end_2b', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
     `)}
 
-    <!-- �?�? SECTION 3 (conditional on Q5 = potentially sufficient or unsure) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
+    <!-- �?�? SECTION 3 (conditional on Q4 = potentially sufficient or unsure) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
     ${condSection('sec3_block', `
       <hr class="section-divider">
       ${secHeader('Section 3', 'Identify Item To Reproduce (ITR)')}
@@ -2084,7 +2183,7 @@ function buildForm(paperId) {
           <li>Open the full-text PDF (linked in the Links and Keywords Report).</li>
           <li>Find an exact numerical result in a table or figure that followed from a <u>simulation study that evaluates a statistical method</u>.</li>
           <li>Work through the document from <u>end to beginning</u>: start with the last table or figure in the paper and work backwards. Within a table or figure, work left to right and top to bottom (as you would read normal English text), so the first suitable result is the one closest to the top-left cell.</li>
-          <li>If multiple numerical results are reported together (e.g., a mean and standard deviation in the same cell), select only the first one.</li>
+          <li>If multiple numerical results are reported together (e.g., a mean and standard deviation in the same cell), select only the first one (again, work left to right and top to bottom).</li>
           <li>Answer the question below.</li>
         </ol>
         <div class="callout warn">
@@ -2093,7 +2192,7 @@ function buildForm(paperId) {
         </div>
         <div class="callout info">
           <span class="callout-label">ℹ Note</span>
-          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result in the order described above. The result must be reported in a figure or table. In-text results do not qualify as an ITR. When recording the result, do not include any punctuation in the number other than the decimal point (e.g., type 12,000 as 12000 and 1,234.56 as 1234.56). Do keep a minus sign for negative values.
+          The result must be an exact number (e.g. 0.123, not &gt;0.123). If a result is not an exact number, skip to the next result in the order described above. The result must be reported in a figure or table. In-text results do not qualify as an ITR. When recording the result, it is important to not include any punctuation in the number other than the decimal point (e.g., type 12,000 as 12000 and 1,234.56 as 1234.56). Do keep a minus sign for negative values. Record the 0 before the decimal even if the paper did not (report 0.25 instead of .25).
         </div>`
       )}
 
@@ -2112,7 +2211,7 @@ function buildForm(paperId) {
           `<p>If you could not find a suitable ITR in the main article, you may identify an ITR in the supplementary materials using the same criteria as described in Section 3A.</p>
           <ol>
             <li>Check the Links and Keywords Report for any mentions of results in supplementary materials (keywords: <code>supplement</code>, <code>appendi</code>).</li>
-            <li>If supplementary materials with results are available, try to identify an ITR using the same steps as in Section 3A.</li>
+            <li>If supplementary materials with results are available, try to identify an ITR using the same steps as in Section 3A. This means that also in the supplementary materials, you start with the last table or figure and work backwards.</li>
           </ol>
           <p><strong>Which supplemental file to use?</strong></p>
           <ul>
@@ -2142,7 +2241,7 @@ function buildForm(paperId) {
         ${instr('Read instructions for Section 3B',
           `<ol>
             <li>Record all information about the numerical result in the fields below. For the page number, report the page number as printed on the page by the journal, not the position of the page in the PDF file (e.g., if the result is on the 3rd page of the PDF and that page is numbered 1247, report 1247). If no page number is printed on the page, report the page number of the PDF instead and mention this in the General notes.</li>
-            <li>Take a screenshot that shows both the result and the caption of the table or figure. If the table or figure is too large to capture in full, include enough of it to allow easy identification later on.</li>
+            <li>Take a screenshot that shows both the result and the caption of the table or figure. If the table or figure is too large to capture in full, include enough of it to allow easy identification later.</li>
             <li>Highlight the specific ITR in the screenshot, preferably in yellow. You can highlight using your PDF reader or the screenshot tool on your computer.</li>
             <li>Paste the screenshot into the screenshot field below.</li>
           </ol>`

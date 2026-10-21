@@ -336,10 +336,30 @@ function migrateV2(data) {
   });
   return out;
 }
+// Version 3: Q1 (supplementary materials available?) was removed; the keys
+// were kept, so the question numbers shown lag one behind the keys (q2_* is
+// Q1, …, q8_* is Q7). An old "No" becomes code "No", an old paywall answer
+// the code question's paywall option.
+const V3_KEY_RE = /^q1_(no|paywall)$/;
+function migrateV3(data) {
+  const out = { ...data };
+  const wasNo = out.q1_no === true || out.q1_no === 'true';
+  const wasPaywall = out.q1_paywall === true || out.q1_paywall === 'true';
+  delete out.q1_no;
+  delete out.q1_paywall;
+  if (wasNo || wasPaywall) {
+    out.q1_yes = true;
+    out.q2_yes = false;
+    out.q2_no = wasNo;
+    out.q2_paywall = wasPaywall;
+  }
+  return out;
+}
 function migrateOldKeys(data) {
   if (!data) return data;
   if (Object.keys(data).some(k => V1_KEY_RE.test(k))) data = migrateV1(data);
   if (Object.keys(data).some(k => V2_KEY_RE.test(k))) data = migrateV2(data);
+  if (Object.keys(data).some(k => V3_KEY_RE.test(k))) data = migrateV3(data);
   return data;
 }
 
@@ -379,46 +399,46 @@ const opts = list => list.map(([code, label]) => ({ code, label }));
 const Q4_SOURCES = ['Journal website', 'External repository', 'In article PDF'];
 
 const ITEMS = [
-  { id: 'q1', sec: '1A', tag: 'Q1', q: 'Are any supplementary materials available?', type: 'single',
+  // Item ids are the keys index.html saves; tags are the question numbers
+  // coders see (one lower since the old Q1 was removed, see migrateV3)
+  { id: 'q2', sec: '1B', tag: 'Q1', q: 'Is any code available?', type: 'single',
     options: opts([['yes', 'Yes'], ['no', 'No'], ['paywall', 'Unable to access the journal website / supplements because of a paywall']]),
     deps: [], applies: () => true },
-  { id: 'q2', sec: '1B', tag: 'Q2', q: 'Is any code available?', type: 'single',
-    options: opts([['yes', 'Yes'], ['no', 'No']]),
-    deps: ['q1'], applies: f => f.q1 === 'yes' },
-  { id: 'q3', sec: '1B', tag: 'Q3', q: 'Is a README or similar file provided with the code?', type: 'single',
+  { id: 'q3', sec: '1B', tag: 'Q2', q: 'Is a README or similar file provided with the code?', type: 'single',
     options: opts([['yes', 'Yes'], ['no', 'No'], ['unsure', 'I am not sure']]),
     deps: ['q2'], applies: f => f.q2 === 'yes', context: [['q3_notes', 'Notes']] },
-  { id: 'q4_source', sec: '1B', tag: 'Q4', q: 'Location of the code: source type(s)', type: 'multi',
+  { id: 'q4_source', sec: '1B', tag: 'Q3', q: 'Location of the code: source type(s)', type: 'multi',
     options: opts(Q4_SOURCES.map(s => [s, s])),
     extract: rec => { const s = Q4_SOURCES.filter(x => q4Rows(rec).some(r => r.source === x)); return s.length ? s : null; },
     deps: ['q2'], applies: f => f.q2 === 'yes', q4context: true },
-  { id: 'q4_link', sec: '1B', tag: 'Q4', q: 'Location of the code: link(s) to the code', type: 'list', norm: normUrl,
+  { id: 'q4_link', sec: '1B', tag: 'Q3', q: 'Location of the code: link(s) to the code', type: 'list', norm: normUrl,
     extract: rec => { const l = q4Rows(rec).map(r => r.link).filter(Boolean); return l.length ? l : null; },
     deps: ['q2'], applies: f => f.q2 === 'yes' },
-  { id: 'q5', sec: '2A', tag: 'Q5', q: 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?', type: 'single',
+  { id: 'q5', sec: '2A', tag: 'Q4', q: 'Is the available code, taken together, potentially sufficient to reproduce the simulations in the paper?', type: 'single',
     options: opts([['ps', 'Potentially sufficient'], ['ci', 'Unambiguously insufficient'], ['unsure', 'I am unsure'], ['un', 'Unable to open file(s)']]),
     deps: ['q2'], applies: f => f.q2 === 'yes', context: [['q7_notes', 'Notes on code evaluation']] },
-  { id: 'q6', sec: '2A', tag: 'Q6', q: 'Why is the code unambiguously insufficient?', type: 'multi',
-    options: opts([['package', 'Code is a package but does not contain code to reproduce the simulation(s)'],
+  { id: 'q6', sec: '2A', tag: 'Q5', q: 'Why is the code unambiguously insufficient?', type: 'multi',
+    options: opts([['package', 'Code is a package but does not contain code to reproduce the simulation results'],
+                   ['method', 'Code details how to implement a method but not how to reproduce the simulation results'],
                    ['other_part', 'Code belongs to other part of the paper (e.g., empirical example)'],
                    ['example', 'Code is example/dummy code'],
                    ['different_study', 'Code belongs to a different study or project'],
                    ['other', 'Other']]),
     deps: ['q5'], applies: f => f.q5 === 'ci', context: [['q6_other_text', 'Description (Other)']] },
-  { id: 'q7', sec: '2A', tag: 'Q7', q: 'In which programming language(s) was the simulation conducted?', type: 'multi',
+  { id: 'q7', sec: '2A', tag: 'Q6', q: 'In which programming language(s) was the simulation conducted?', type: 'multi',
     options: opts([['r', 'R'], ['python', 'Python'], ['matlab', 'MATLAB'], ['stata', 'Stata'], ['julia', 'Julia'], ['spss', 'SPSS'],
-                   ['mplus', 'MPlus'], ['c_cpp', 'C/C++'], ['shell', 'Shell'], ['unclear', 'Unclear'], ['other', 'Other']]),
-    deps: ['q5'], applies: f => ['ps', 'unsure', 'un'].includes(f.q5) },
-  { id: 'q7_other_text', sec: '2A', tag: 'Q7 other', q: 'Other programming language(s)', type: 'text', norm: normSpace,
+                   ['mplus', 'MPlus'], ['c_cpp', 'C/C++'], ['shell', 'Shell'], ['unclear', 'Unsure'], ['other', 'Other']]),
+    deps: ['q2'], applies: f => f.q2 === 'yes' },
+  { id: 'q7_other_text', sec: '2A', tag: 'Q6 other', q: 'Other programming language(s)', type: 'text', norm: normSpace,
     deps: ['q7'], applies: f => (f.q7 || []).includes('other') },
-  { id: 'q8', sec: '2B', tag: 'Q8', q: 'Why is code not openly available?', type: 'multi',
+  { id: 'q8', sec: '2B', tag: 'Q7', q: 'Why is code not openly available?', type: 'multi',
     options: opts([['not_mentioned', 'Code sharing is not mentioned in the paper'],
                    ['broken', 'Paper states that code is shared, but the link is broken'],
                    ['empty', 'Paper states that code is shared, but it is not at the linked location'],
                    ['request', 'Code is available upon request'],
                    ['restricted', 'Code is available with restricted access'],
                    ['other', 'Other']]),
-    deps: ['q1', 'q2'], applies: f => f.q1 === 'no' || f.q2 === 'no', context: [['q8_notes', 'Notes on unavailability']] },
+    deps: ['q2'], applies: f => f.q2 === 'no', context: [['q8_notes', 'Notes on unavailability']] },
   { id: 'q_itr_main', sec: '3', tag: 'ITR main', q: 'Did you identify a suitable ITR in the main paper?', type: 'single',
     options: opts([['yes', 'Yes'], ['no', 'No']]),
     deps: ['q5'], applies: f => ['ps', 'unsure'].includes(f.q5) },
@@ -436,7 +456,6 @@ const ITEMS = [
 ];
 const ITEM_BY_ID = Object.fromEntries(ITEMS.map(i => [i.id, i]));
 const SECTIONS = {
-  '1A': ['Section 1A', 'Identify all supplementary materials'],
   '1B': ['Section 1B', 'Find code in materials'],
   '2A': ['Section 2A', 'Evaluate code'],
   '2B': ['Section 2B', 'Reasons for unavailable code'],
@@ -472,8 +491,8 @@ function exportVal(item, v) {
   if (item.type === 'list') return v.join(' | ');
   return v;
 }
-// A coder has coded a paper once Q1 is answered
-const isCoded = rec => ITEMS[0].options.some(o => isTrue(rec[`q1_${o.code}`]));
+// A coder has coded a paper once Q1 (code available?) is answered
+const isCoded = rec => ITEM_BY_ID.q2.options.some(o => isTrue(rec[`q2_${o.code}`]));
 
 // ══════════════════════════════════════════════════════════════════════
 // Analysis of one paper
@@ -484,7 +503,7 @@ const STATUS_LABEL = {
 };
 const PAPER_STATUS = {
   open:     ['To resolve', 'Items still need a decision'],
-  third:    ['Awaiting 3rd coder', 'A coder hit a paywall (Q1) or could not open the code (Q5)'],
+  third:    ['Awaiting 3rd coder', 'A coder hit a paywall (Q1) or could not open the code (Q4)'],
   resolved: ['Resolved', 'All discrepancies decided'],
   agreed:   ['Full agreement', 'Coders agreed on every item'],
   waiting:  ['Awaiting coders', 'Fewer than two coders have coded this paper'],
@@ -543,8 +562,8 @@ function analysePaper(pid) {
 
   const triggers = [];
   active.forEach(c => {
-    if (isTrue(c.rec.q1_paywall)) triggers.push({ coder: c.id, reason: 'Q1: paywall' });
-    if (isTrue(c.rec.q5_un)) triggers.push({ coder: c.id, reason: 'Q5: unable to open file(s)' });
+    if (isTrue(c.rec.q2_paywall)) triggers.push({ coder: c.id, reason: 'Q1: paywall' });
+    if (isTrue(c.rec.q5_un)) triggers.push({ coder: c.id, reason: 'Q4: unable to open file(s)' });
   });
   const waived = !!dec.no_third;
   const needsThird = triggers.length > 0 && active.length < 3 && !waived;
@@ -826,7 +845,7 @@ function renderOverview() {
       <h3>3 · Papers</h3>
       ${all.length ? `<div class="stat-grid">${Object.entries(PAPER_STATUS).map(([k, [l, d]]) =>
         `<div class="stat" data-act="filter" data-filter="${k}"><div class="num">${counts[k]}</div><div class="lbl">${l}</div><div class="desc">${d}</div></div>`).join('')}</div>
-        <p class="small muted">${all.length} papers in total. A paper is sent to a third coder when a coder selected the paywall option in Q1 or "Unable to open file(s)" in Q5; use <em>3rd coder list</em> (top bar) for the paper IDs to put in <code>GENERATE_BATCH.R</code>.</p>
+        <p class="small muted">${all.length} papers in total. A paper is sent to a third coder when a coder selected the paywall option in Q1 or "Unable to open file(s)" in Q4; use <em>3rd coder list</em> (top bar) for the paper IDs to put in <code>GENERATE_BATCH.R</code>.</p>
         ${firstOpen ? `<button class="btn primary" data-act="paper" data-pid="${esc(firstOpen.pid)}">Start resolving →</button>` : ''}`
       : '<p class="muted">No coder files loaded yet.</p>'}
     </div>

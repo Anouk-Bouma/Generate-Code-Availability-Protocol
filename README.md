@@ -205,7 +205,7 @@ Send the `.zip` (or the folder). The coder:
 1.  Unzips it and opens `index.html` in a browser.
 2.  On the login screen, uploads `papers_batch_<coder_id>.json` ("Upload batch file (.json)").
 3.  Codes each paper, using `support_file.html` and the PDFs in `pdfs/` as reference. `Protocol_instructions.docx` contains the same instructions for reading on a separate device or on paper.
-4.  Uses **Download backup** periodically and sends you the final backup JSON (plus the `screenshots_<coder>_<date>.zip` that is downloaded with it, if the coder recorded ITR screenshots).
+4.  Uses **Download backup** periodically and sends you the final backup JSON (plus the `screenshots_<coder>_<date>.zip` that is saved with it, if the coder recorded ITR screenshots). In Chrome and Edge the button asks each time which folder to save the backup in; other browsers save it to the Downloads folder.
 
 ------------------------------------------------------------------------
 
@@ -222,10 +222,10 @@ Your decisions are saved in the browser as you go. **Save progress** downloads o
 
 ### How answers are compared
 
--   Items follow the protocol's routing. An item only counts if the final answers to the earlier questions lead to it: once you decide Q1 = "No", Q2–Q7 no longer apply and Q8 does. Items that depend on an undecided item show as *Waiting* until you decide that item, so work from top to bottom.
+-   Items follow the protocol's routing. An item only counts if the final answers to the earlier questions lead to it: once you decide Q1 = "No", Q2–Q6 no longer apply and Q7 does. Items that depend on an undecided item show as *Waiting* until you decide that item, so work from top to bottom.
 -   Per item, the status is **agreement** (every coder who answered gave the same answer), **disagreement**, **only one coder answered** (the other coder was routed elsewhere; you confirm the answer, or use the button that accepts all of them at once) or **no coder answered**.
--   Small formatting differences are not disagreements: links are compared without `http(s)://`, `www.` and trailing `/`; "Table 3" equals "table 3"; Q4 and the select-all-that-apply questions are compared as sets. ITR values are compared exactly (`0.87` and `0.870` differ). Notes are shown but not compared.
--   **Third coder:** a paper needs a third coder when a coder selected the paywall option in Q1 or "Unable to open file(s)" in Q5, until three coders have coded it. **3rd coder list** gives these paper IDs as an R vector for `batch_ids` in `GENERATE_BATCH.R` (keep `run_extraction <- FALSE`, so the IDs stay the same). You can also tick "No third coder needed" on a paper.
+-   Small formatting differences are not disagreements: links are compared without `http(s)://`, `www.` and trailing `/`; "Table 3" equals "table 3"; Q3 and the select-all-that-apply questions are compared as sets. ITR values are compared exactly (`0.87` and `0.870` differ). Notes are shown but not compared.
+-   **Third coder:** a paper needs a third coder when a coder selected the paywall option in Q1 or "Unable to open file(s)" in Q4, until three coders have coded it. **3rd coder list** gives these paper IDs as an R vector for `batch_ids` in `GENERATE_BATCH.R` (keep `run_extraction <- FALSE`, so the IDs stay the same). You can also tick "No third coder needed" on a paper.
 -   If a newer backup changes the coders' answers to an item you already decided, the item is flagged *Coder answers changed* until you confirm it.
 
 ### What the export contains
@@ -234,10 +234,10 @@ Your decisions are saved in the browser as you go. **Save progress** downloads o
 
 | File | Contents |
 |----|----|
-| `final_dataset.csv` | One row per paper: metadata, `n_coders`, `coder_ids`, third-coder triggers, `status` (`agreed`, `resolved`, `open`, `awaiting_third_coder`, `awaiting_coders`), `has_disagreement`, `disagreement_items`, `resolver_decision_items`, the final answer per item (`q1` … `itr_supp_link`, as codes), a short summary of how each decided item was resolved, and your note on the paper. |
+| `final_dataset.csv` | One row per paper: metadata, `n_coders`, `coder_ids`, third-coder triggers, `status` (`agreed`, `resolved`, `open`, `awaiting_third_coder`, `awaiting_coders`), `has_disagreement`, `disagreement_items`, `resolver_decision_items`, the final answer per item (`q2` … `itr_supp_link`, as codes; the column names are the keys the protocol saves, which are one higher than the question numbers coders see: `q2` is Q1, `q3` is Q2, …, `q8` is Q7), a short summary of how each decided item was resolved, and your note on the paper. |
 | `item_level.csv` | One row per paper × item: each coder's answer, the status, the final answer, the resolution (`agreement`, `coder_choice`, `resolver_own`, `resolver_override`, `not_applicable`, `unresolved`), which coders' answers match the final answer, your note and the date. Use this for inter-rater agreement. |
 | `coder_answers.csv` | One row per coder × paper: every item plus the coder's notes. |
-| `codebook.csv` | The codes used in the exports (e.g. Q5 `ps` = Potentially sufficient) |
+| `codebook.csv` | The codes used in the exports, with the item key and the question number coders see (e.g. item `q5`, Q4, `ps` = Potentially sufficient) |
 | `reconciliation_progress.json` | Same as **Save progress**. |
 
 Items that do not apply to a paper are empty. Read the CSVs in R with `read.csv(file, encoding = "UTF-8")` or `readr::read_csv(file)`.
