@@ -545,6 +545,8 @@ input.req-error, select.req-error { border-color: #e53e3e !important; background
   font-weight: 700; font-size: 10pt;
   text-align: center;
 }
+.backup-reminder { margin-top: 6px; font-weight: 400; font-size: 9pt; }
+#validation-msg .backup-reminder { margin-top: 4px; }
 
 /* section divider */
 .section-divider {
@@ -1360,7 +1362,8 @@ function condSection(id, content) {
 }
 
 function completionMarker(text) {
-  return `<div class="complete-marker">✓ &nbsp;${text}</div>`;
+  return `<div class="complete-marker">✓ &nbsp;${text}
+    <div class="backup-reminder">If this is the last paper you plan to code this session, please do not forget to download a backup to your computer.</div></div>`;
 }
 
 function subsec(title) {
@@ -1414,20 +1417,19 @@ function updateSection1ADone(done) {
     : 'I completed all steps in this section, go to next section';
 }
 
-// The green "Phase 1 complete" marker sits at the end of every route through
-// the protocol (code question = paywall, 2B, sufficiency = insufficient or
-// unable to open, ITR recorded, no ITR found). It is shown only once every
-// required question on the current route is answered, and the paper's tick in
-// the sidebar (_complete) always matches it. (Keys lag one behind the question
-// numbers shown: q2_* is Q1, q5_* is Q4, etc.; see migrateV3.)
+// The green "Phase 1 complete" marker sits below the Comments & Observations
+// box, so coders see they can still add a note. It is shown once every
+// required question on the current route is answered (every route ends: code
+// question = paywall, 2B, sufficiency = insufficient or unable to open, ITR
+// recorded, no ITR found), and the paper's tick in the sidebar (_complete)
+// always matches it. The paywall route has its own wording. (Keys lag one
+// behind the question numbers shown: q2_* is Q1, q5_* is Q4, etc.; see
+// migrateV3.)
 function updateCompletion() {
   if (!activePaperId) return;
   const done = isFormComplete();
   toggleSection('end_paywall', done && isChecked('q2_paywall'));
-  toggleSection('end_2b', done);
-  toggleSection('end_2a', done && (isChecked('q5_ci') || isChecked('q5_un')));
-  toggleSection('end_no_itr', done && isChecked('q_itr_supp_no'));
-  toggleSection('end_itr', done);
+  toggleSection('end_done', done && !isChecked('q2_paywall'));
   if (!!loadData(activePaperId)._complete !== done) {
     saveData(activePaperId, { _complete: done });
     renderSidebar();
@@ -1698,7 +1700,8 @@ function advanceToNextPaper() {
   } else {
     const msg = document.getElementById('validation-msg');
     msg.className = 'success';
-    msg.textContent = 'All papers in the batch are complete!';
+    msg.innerHTML = 'All papers in the batch are complete!'
+      + '<div class="backup-reminder">Please do not forget to download a backup to your computer.</div>';
   }
 }
 
@@ -1880,7 +1883,6 @@ function buildForm(paperId) {
         ])
       )}
 
-      ${condSection('end_paywall', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
 
       ${condSection('q3_block', `
         ${instr('How to identify a README file',
@@ -2131,7 +2133,6 @@ function buildForm(paperId) {
         `<textarea class="notes-area" data-key="q7_notes" placeholder="Any additional observations about the code…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
-      ${condSection('end_2a', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
 
     `)}
 
@@ -2164,7 +2165,6 @@ function buildForm(paperId) {
         `<textarea class="notes-area" data-key="q8_notes" placeholder="Describe reason if 'Other', or add any relevant detail…" oninput="triggerSave()" rows="3"></textarea>`
       )}
 
-      ${condSection('end_2b', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
     `)}
 
     <!-- �?�? SECTION 3 (conditional on Q4 = potentially sufficient or unsure) �?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�?�? -->
@@ -2231,7 +2231,6 @@ function buildForm(paperId) {
             { text: 'No', value: 'no' },
           ])
         )}
-        ${condSection('end_no_itr', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
       `)}
 
       ${condSection('sec3b_block', `
@@ -2282,7 +2281,6 @@ function buildForm(paperId) {
           </div>`
         )}
 
-        ${condSection('end_itr', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
 
       `)}
     `)}
@@ -2294,6 +2292,10 @@ function buildForm(paperId) {
       `<p>Use this box for any uncertainties or observations that do not fit the fields above.</p>`
     )}
     <textarea class="notes-area" data-key="general_notes" placeholder="Any additional notes…" oninput="triggerSave()" rows="5" style="margin-top:12px;width:100%;"></textarea>
+
+    <!-- Shown once every required question on the coder's route is answered -->
+    ${condSection('end_paywall', completionMarker('Phase 1 complete for this paper (no access because of a journal paywall; the paper will be assessed by an additional coder) — move to the next paper.'))}
+    ${condSection('end_done', completionMarker('Phase 1 complete for this paper — move to the next paper.'))}
 
     <button id="continue-btn" onclick="validateAndContinue()">Continue to next paper →</button>
     <div id="validation-msg"></div>
